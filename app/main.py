@@ -1,12 +1,6 @@
-"""Минимальный REST API (Flask): список заметок в памяти.
-
-Приложение намеренно простое: оно нужно как мишень для проверок
-Gitleaks, Bandit, pip-audit, Trivy и OWASP ZAP.
-"""
 import os
 import threading
-
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
@@ -14,7 +8,7 @@ MAX_ITEMS = 1000
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024  # 16 КБ на запрос
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
     items: list[dict] = []
     lock = threading.Lock()
@@ -26,14 +20,15 @@ def create_app() -> Flask:
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'none'; frame-ancestors 'none'"
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
         )
         response.headers.pop("Server", None)
         return response
 
     @app.get("/")
     def index():
-        return jsonify(name="secure-release-app", version="1.0.0")
+        return render_template("index.html")
 
     @app.get("/health")
     def health():
@@ -48,40 +43,47 @@ def create_app() -> Flask:
     def create_item():
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
-            return jsonify(error="ожидается JSON-объект"), 400
+            return jsonify(error="Ожидается JSON-объект"), 400
 
         text = data.get("text")
         if not isinstance(text, str) or not text.strip():
-            return jsonify(error="поле 'text' обязательно"), 400
+            return jsonify(error="Поле 'text' обязательно"), 400
         text = text.strip()
         if len(text) > MAX_TEXT_LENGTH:
-            return jsonify(error="текст слишком длинный"), 400
+            return jsonify(error="Текст слишком длинный"), 400
 
         with lock:
             if len(items) >= MAX_ITEMS:
-                return jsonify(error="хранилище переполнено"), 507
+                return jsonify(error="Хранилище переполнено"), 507
             item = {"id": len(items) + 1, "text": text}
             items.append(item)
         return jsonify(item), 201
 
+    @app.delete("/api/items/<int:item_id>")
+    def delete_item(item_id):
+        with lock:
+            for i, item in enumerate(items):
+                if item["id"] == item_id:
+                    items.pop(i)
+                    return jsonify(status="deleted"), 200
+        return jsonify(error="Заметка не найдена"), 404
+
     @app.errorhandler(404)
     def not_found(_):
-        return jsonify(error="не найдено"), 404
+        return jsonify(error="Не найдено"), 404
 
     @app.errorhandler(405)
     def method_not_allowed(_):
-        return jsonify(error="метод не разрешён"), 405
+        return jsonify(error="Метод не разрешен"), 405
 
     @app.errorhandler(413)
     def too_large(_):
-        return jsonify(error="запрос слишком большой"), 413
+        return jsonify(error="Запрос слишком большой"), 413
 
     return app
-
 
 app = create_app()
 
 if __name__ == "__main__":
-    # Только для локальной разработки. В Docker используется gunicorn.
     app.run(host=os.environ.get("HOST", "127.0.0.1"),
             port=int(os.environ.get("PORT", "8000")))
