@@ -1,4 +1,4 @@
-"""Один ограниченный Chat Completions запрос к доверенному endpoint из env."""
+"""Один ограниченный Chat Completions запрос с явно заданными настройками."""
 
 import http.client
 import json
@@ -135,7 +135,7 @@ def validate_response(raw, groups):
     return ordered
 
 
-def recommend(groups, offline=False):
+def recommend(groups, offline=False, *, config=None):
     def fallback(message):
         return {
             "mode": "fallback",
@@ -145,16 +145,17 @@ def recommend(groups, offline=False):
 
     if offline:
         return fallback("Офлайн: детерминированные рекомендации, модель не вызывалась.")
-    key = os.environ.get("OPENAI_API_KEY", "")
+    settings = os.environ if config is None else config
+    key = settings.get("OPENAI_API_KEY", "")
     if not key:
         return fallback("Ключ API отсутствует: детерминированные рекомендации.")
     if not groups:
         return fallback("Нет замечаний для модели. Проверьте отдельно полноту сканов и pipeline.")
-    model = os.environ.get("OPENAI_MODEL", "")
+    model = settings.get("OPENAI_MODEL", "")
     if not model or len(model) > 200:
         return fallback("OPENAI_MODEL не задан или некорректен: детерминированные рекомендации.")
     try:
-        url = endpoint(os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1")
+        url = endpoint(settings.get("OPENAI_BASE_URL") or "https://api.openai.com/v1")
         body = payload(groups, model)
         if len(body) > MAX_REQUEST:
             return fallback(
@@ -179,6 +180,10 @@ def recommend(groups, offline=False):
         if len(raw) > MAX_RESPONSE:
             return fallback("Ответ API превысил лимит: детерминированные рекомендации.")
         recommendations = validate_response(raw, groups)
+        if any(
+            key in record[field] for record in recommendations for field in ("reason", "action")
+        ):
+            return fallback("Ответ API содержит ключ: использованы локальные рекомендации.")
         return {
             "mode": "model",
             "message": "Рекомендации модельного API; решение о выпуске принимает policy.",

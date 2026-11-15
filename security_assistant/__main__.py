@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .model import recommend
-from .parsers import SCANNERS, ReportError, load_json, read_reports
-from .policy import DEFAULT_POLICY, evaluate, group_findings, load_policy
+from .analysis import analyze
+from .parsers import SCANNERS, ReportError, load_json
+from .policy import DEFAULT_POLICY, load_policy
 
 
 class CLIParser(argparse.ArgumentParser):
@@ -89,20 +89,17 @@ def main(argv=None):
     try:
         policy = load_policy(args.policy)
         scanners = (args.scanner,) if args.scanner else SCANNERS
-        findings, states = read_reports(args.reports, scanners)
         if args.scanner:
             policy = {**policy, "required_scanners": [args.scanner]}
         pipeline = load_json(args.pipeline, 16000) if args.pipeline else None
-        gate = evaluate(findings, states, policy, pipeline)
-        groups = group_findings(findings)
-        advisory = recommend(groups, offline=args.offline or args.gate)
-        analysis = {
-            "schema_version": 1,
-            "gate": gate,
-            "scans": states,
-            "groups": groups,
-            "advisory": advisory,
-        }
+        analysis = analyze(
+            args.reports,
+            offline=args.offline or args.gate,
+            policy=policy,
+            scanners=scanners,
+            pipeline=pipeline,
+        )
+        gate, advisory = analysis["gate"], analysis["advisory"]
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / "analysis.json").write_text(
             json.dumps(analysis, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

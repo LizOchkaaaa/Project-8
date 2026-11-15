@@ -430,6 +430,15 @@ def test_model_cannot_lower_policy_priority(monkeypatch, reports):
     assert model.recommend(groups)["mode"] == "fallback"
 
 
+def test_provider_cannot_echo_key_into_analysis(monkeypatch, groups):
+    answer = api_answer(groups)
+    answer["recommendations"][0]["action"] = "fake-local-test-value"
+    setup_api(monkeypatch, groups, answer=answer)
+    result = model.recommend(groups)
+    assert result["mode"] == "fallback"
+    assert "fake-local-test-value" not in json.dumps(result)
+
+
 def test_truncated_http_response_uses_fallback(monkeypatch, groups):
     setup_api(monkeypatch, groups, error=http.client.IncompleteRead(b"private-response", 999))
     result = model.recommend(groups)

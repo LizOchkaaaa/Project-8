@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Настройки стенда · Project 8{% endblock %}
+{% block location %}Настройки стенда{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}" defer></script>{% endblock %}
+{% block content %}
+<header class="page-heading"><div><h1>Настройки стенда</h1><p>Инструменты, правила допуска и доступ для MCP-клиентов.</p></div><span class="page-label">Локальный администратор</span></header>
+<nav class="settings-links" aria-label="Разделы настроек"><a href="#connections">Инструменты</a><a href="#policy">Политика</a><a href="#environment">Окружение</a><a href="#mcp-settings">MCP</a></nav>
+<p id="admin-status" class="admin-status" role="status" aria-live="polite">Загружаем настройки…</p>
+<form id="config-form" data-token="{{ assistant_token }}" autocomplete="off">
+  <fieldset id="config-fields" disabled>
+    <legend class="sr-only">Конфигурация стенда</legend>
+    <section id="connections" class="settings-section" aria-labelledby="connections-title">
+      <div class="settings-heading"><div><h2 id="connections-title">Источники отчётов</h2><p>Каждый адрес должен отдавать готовый JSON-отчёт соответствующего сканера.</p></div><span id="connector-count" class="count-badge"></span></div>
+      <p class="field-help">Публичный HTTPS или локальный HTTP. Метод GET, без параметров URL и редиректов. Получение отчёта не запускает сканер и не подтверждает свежесть данных.</p>
+      {% for scanner, title, category in [('gitleaks','Gitleaks','Секреты'),('bandit','Bandit','Python-код'),('pip-audit','pip-audit','Зависимости'),('trivy','Trivy','Контейнер'),('zap','OWASP ZAP','Запущенное приложение')] %}
+      <article class="connector-row" data-scanner="{{ scanner }}">
+        <div class="connector-heading"><div><h3>{{ title }}</h3><span class="field-help">{{ category }}</span></div><label class="check-label" for="enabled-{{ scanner }}"><input id="enabled-{{ scanner }}" type="checkbox" name="enabled-{{ scanner }}"><span>Подключён</span></label></div>
+        <div class="connector-fields"><div><label for="url-{{ scanner }}">Адрес JSON-отчёта</label><input id="url-{{ scanner }}" name="url-{{ scanner }}" type="url" maxlength="2000" placeholder="https://reports.example.org/{{ scanner }}.json" spellcheck="false" autocomplete="off" required></div><div><label for="credential-{{ scanner }}">Авторизация</label><select id="credential-{{ scanner }}" name="credential-{{ scanner }}"><option value="">Без авторизации</option><option value="PROJECT8_CONNECTOR_{{ scanner | upper | replace('-', '_') }}_TOKEN">Bearer из окружения</option></select></div></div>
+        <p id="credential-help-{{ scanner }}" class="credential-help field-help" hidden>Переменная <code>PROJECT8_CONNECTOR_{{ scanner | upper | replace('-', '_') }}_TOKEN</code>. Значение задаётся в окружении сервера и не возвращается браузеру.</p>
+      </article>
+      {% endfor %}
+    </section>
+    <section id="policy" class="settings-section" aria-labelledby="policy-title">
+      <div class="settings-heading"><div><h2 id="policy-title">Порог блокировки</h2><p>Замечание указанной серьёзности или выше блокирует допуск по отчётам.</p></div></div>
+      <div class="policy-controls">
+      {% for scanner, title in [('gitleaks','Gitleaks'),('bandit','Bandit'),('pip-audit','pip-audit'),('trivy','Trivy'),('zap','ZAP')] %}
+        <div><label for="threshold-{{ scanner }}">{{ title }}</label><select id="threshold-{{ scanner }}" name="threshold-{{ scanner }}" {% if scanner == 'gitleaks' %}disabled aria-describedby="mandatory-policy"{% endif %}><option value="low">Низкая</option><option value="medium">Средняя</option><option value="high">Высокая</option><option value="critical">Критическая</option></select></div>
+      {% endfor %}
+      </div>
+      <div id="mandatory-policy" class="mandatory-policy"><h3>Обязательные правила</h3><ul><li>Нужны отчёты всех пяти сканеров, даже если API выключен.</li><li>Секреты, критические замечания и неизвестная серьёзность всегда блокируют допуск.</li><li>Ошибка, таймаут или отсутствующий отчёт означают отказ.</li></ul></div>
+      <p class="field-help">Эти настройки действуют для веб-загрузки, API инструментов и MCP. Выпуск в CI использует версионируемую .security/policy.yml; админ-панель её не изменяет.</p>
+    </section>
+    <section id="environment" class="settings-section" aria-labelledby="environment-title">
+      <div class="settings-heading"><div><h2 id="environment-title">Окружение обработки</h2><p>Лимиты получения отчётов. Системные переменные и команды здесь не изменяются.</p></div></div>
+      <div class="timeout-controls"><div><label for="connect-seconds">Подключение, с</label><input id="connect-seconds" name="connect_seconds" type="number" min="1" max="3" step="1" required></div><div><label for="read-seconds">Ожидание данных, с</label><input id="read-seconds" name="read_seconds" type="number" min="1" max="5" step="1" required></div><div><label for="total-seconds">Бюджет получения, с</label><input id="total-seconds" name="total_seconds" type="number" min="1" max="15" step="1" required></div><div><label for="workers">Параллельных запросов</label><input id="workers" name="workers" type="number" min="1" max="3" step="1" required></div></div>
+      <p class="field-help">До 8 МиБ на отчёт и один полный анализ одновременно. Системный DNS и вычисления Python нельзя принудительно прервать точно по этому бюджету. Стенд рассчитан на один процесс.</p>
+      <a class="settings-inline-link" href="/security">Настройки модели и разовый ввод API-ключа находятся на экране разбора</a>
+    </section>
+  </fieldset>
+  <div class="save-bar"><div><span id="save-state">Настройки ещё не загружены</span><small id="config-revision"></small></div><div class="save-actions"><button type="button" id="reload-config" class="secondary">Перезагрузить</button><button type="submit" id="save-config" disabled>Сохранить настройки</button></div></div>
+</form>
+<section id="mcp-settings" class="settings-section mcp-settings" aria-labelledby="mcp-title"><div class="settings-heading"><div><h2 id="mcp-title">MCP-сервер приложения</h2><p>Внешний MCP-клиент вызывает тот же анализ, что и веб-интерфейс.</p></div><span id="mcp-state" class="status-badge review">Проверяем…</span></div><div class="mcp-content"><div><p>Streamable HTTP, протокол <code>2025-11-25</code>. Доступны три инструмента:</p><dl class="mcp-tools"><dt>get_policy</dt><dd>Прочитать действующую policy.</dd><dt>analyze_reports</dt><dd>Разобрать переданные JSON-отчёты.</dd><dt>run_tools</dt><dd>Получить отчёты настроенных API и разобрать их.</dd></dl></div><div><p id="mcp-example-label">Пример параметров подключения</p><pre id="mcp-example" tabindex="0" aria-labelledby="mcp-example-label"></pre></div></div><p class="field-help">Для включения задайте отдельный PROJECT8_MCP_TOKEN в окружении сервера и перезапустите приложение. Токен не показывается в панели. Поддерживаются локальные HTTP-клиенты с настраиваемым Authorization; OAuth, stdio и доступ через публичный прокси не реализованы.</p></section>
+<noscript><p>Для просмотра и сохранения настроек включите JavaScript.</p></noscript>
+{% endblock %}

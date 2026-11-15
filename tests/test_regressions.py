@@ -16,7 +16,7 @@ def test_create_delete_gap_create_delete_targets_correct_note():
     assert client.get("/api/items").json == {"items": [keep]}
 
 
-def test_security_page_is_read_only_and_strict_csp():
+def test_security_page_keeps_strict_csp_and_safe_rendering():
     client = create_app().test_client()
     for route in ("/", "/security"):
         response = client.get(route)
@@ -34,7 +34,7 @@ def test_security_page_is_read_only_and_strict_csp():
             for s in ("innerHTML", "outerHTML", "insertAdjacentHTML", "eval(", "OPENAI_API_KEY")
         )
     js = (ROOT / "app/static/security.js").read_text(encoding="utf-8")
-    assert "fetch(" not in js and "XMLHttpRequest" not in js
+    assert "localStorage" not in js and "sessionStorage" not in js
     assert client.post("/security", json={}).status_code == 405
     assert client.get("/api/security").status_code == 404
 

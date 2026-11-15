@@ -1,26 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Заметки · Журнал сборки{% endblock %}
+{% block title %}Заметки · Project 8{% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='notes.js') }}" defer></script>{% endblock %}
 {% block content %}
-<div class="intro">
-  <h1>Заметки</h1>
-  <p>Короткие записи для работы над сборкой. До 200 символов в каждой заметке.</p>
-  <p class="muted">Записи общие для этого процесса и исчезают после перезапуска. Не сохраняйте здесь секреты.</p>
-</div>
-<section class="workspace" aria-labelledby="new-note">
-  <h2 id="new-note">Новая заметка</h2>
-  <form id="note-form">
-    <label for="note-text">Текст заметки</label>
-    <textarea id="note-text" name="text" maxlength="200" rows="3" required autocomplete="off"></textarea>
-    <button type="submit">Добавить заметку</button>
-  </form>
+<header class="page-heading"><div><h1>Заметки к сборке</h1><p>Решения, наблюдения и короткие записи для команды.</p></div></header>
+<div class="notes-layout"><div>
+  <section class="note-editor" aria-labelledby="new-note">
+    <h2 id="new-note">Новая заметка</h2>
+    <form id="note-form"><label for="note-text">Что нужно запомнить?</label><textarea id="note-text" name="text" maxlength="200" rows="3" required autocomplete="off" placeholder="Например, что проверить перед следующим выпуском…" aria-describedby="note-help"></textarea><button type="submit">Добавить заметку</button></form>
+    <p id="note-help" class="field-help">До 200 символов. Записи общие и исчезают после перезапуска приложения. Не сохраняйте секреты.</p>
+  </section>
+  <h2 class="notes-list-heading">Записи команды</h2>
   <p id="note-status" role="status" aria-live="polite">Загружаем заметки…</p>
   <ul id="notes" class="notes" aria-label="Сохранённые заметки"></ul>
-</section>
-<aside class="next-step">
-  <h2>Проверки сборки</h2>
-  <p>Откройте готовый отчёт, чтобы увидеть связанные замечания и порядок исправлений.</p>
-  <a href="/security">Разбор проверок</a>
-</aside>
+</div><aside class="notes-aside">{{ icon('scan') }}<h2>Что исправить первым?</h2><p>Загрузите отчёты сканеров. Помощник сопоставит замечания и предложит порядок работы.</p><a href="/security">Разбор проверок{{ icon('arrow') }}</a></aside></div>
 <noscript><p>Для добавления заметок включите JavaScript. API доступен по /api/items.</p></noscript>
 {% endblock %}

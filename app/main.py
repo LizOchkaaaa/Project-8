@@ -1,7 +1,10 @@
 import os
 import threading
+from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
+
+from app.security import register_security
 
 MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
@@ -10,6 +13,7 @@ MAX_ITEMS = 1000
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+    register_security(app)
 
     items: list[dict] = []
     next_id = 1
@@ -36,6 +40,13 @@ def create_app() -> Flask:
     @app.get("/security")
     def security():
         return render_template("security.html")
+
+    @app.get("/documentation")
+    def documentation():
+        document = Path(app.root_path).parent / "docs" / "Project-8-guide.docx"
+        if not document.is_file():
+            return jsonify(error="Документация отсутствует в этой сборке."), 404
+        return send_file(document, as_attachment=True, download_name="Project-8-guide.docx")
 
     @app.get("/health")
     def health():

@@ -12,15 +12,25 @@ JOBS = ("lint", "tests", "secret-detection", "sast", "sca", "build", "scan-image
 
 
 def load_policy(path=DEFAULT_POLICY):
-    policy = load_json(path, 16000)
-    if not isinstance(policy, dict) or policy.get("version") != 1:
+    return validate_policy(load_json(path, 16000))
+
+
+def validate_policy(policy):
+    if (
+        not isinstance(policy, dict)
+        or type(policy.get("version")) is not int
+        or policy.get("version") != 1
+    ):
         raise ReportError("Некорректная версия policy")
     if policy.get("required_scanners") != list(SCANNERS):
         raise ReportError("Policy должна требовать все пять сканеров")
     thresholds = policy.get("thresholds")
     if not isinstance(thresholds, dict) or set(thresholds) != set(SCANNERS):
         raise ReportError("Некорректные thresholds policy")
-    if any(v not in {"low", "medium", "high", "critical"} for v in thresholds.values()):
+    if any(
+        type(v) is not str or v not in {"low", "medium", "high", "critical"}
+        for v in thresholds.values()
+    ):
         raise ReportError("Некорректный порог policy")
     if policy.get("block_unknown") is not True or policy.get("block_secrets") is not True:
         raise ReportError("Policy должна блокировать unknown и secrets")

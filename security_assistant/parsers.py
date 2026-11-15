@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 
@@ -243,6 +244,57 @@ def parse_zap(data):
 
 
 PARSERS = dict(zip(SCANNERS, (parse_gitleaks, parse_bandit, parse_pip, parse_trivy, parse_zap)))
+
+
+def strict_json(raw, limit):
+    """Bound nesting/structure before allocation; reject ambiguous JSON."""
+    if not raw or len(raw) > limit:
+        raise ValueError("Invalid JSON")
+    depth = count = 0
+    quoted = escaped = False
+    for byte in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif byte == 92:
+                escaped = True
+            elif byte == 34:
+                quoted = False
+        elif byte == 34:
+            quoted = True
+        elif byte in (91, 123):
+            depth += 1
+            count += 1
+        elif byte in (93, 125):
+            depth -= 1
+        elif byte in (44, 58):
+            count += 1
+        if depth > 64 or count > 200000:
+            raise ValueError("Invalid JSON")
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate key")
+            result[key] = value
+        return result
+
+    def constant(_):
+        raise ValueError("Non-finite JSON")
+
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("Non-finite JSON")
+        return number
+
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=pairs,
+        parse_constant=constant,
+        parse_float=finite_float,
+    )
 
 
 def load_json(path, limit=MAX_BYTES):

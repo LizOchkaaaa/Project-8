@@ -1,33 +1,73 @@
 {% extends "base.html" %}
-{% block title %}Разбор проверок · Журнал сборки{% endblock %}
+{% block title %}Разбор проверок · Project 8{% endblock %}
+{% block location %}Разбор проверок{% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='security.js') }}" defer></script>{% endblock %}
 {% block content %}
-<div class="intro">
-  <h1>Разбор проверок</h1>
-  <p>Связанные замечания из пяти проверок и рекомендуемый порядок исправлений.</p>
-  <p>Скачайте артефакт <strong>security-analysis</strong> из CI или создайте отчёт локально:</p>
-  <pre><code>python -m security_assistant --reports reports --output analysis --offline</code></pre>
-</div>
-<section class="workspace" aria-labelledby="file-title">
-  <h2 id="file-title">Открыть готовый разбор</h2>
-  <label for="analysis-file">Файл analysis.json</label>
-  <input type="file" id="analysis-file" name="analysis" accept=".json,application/json" aria-describedby="file-help file-status">
-  <p id="file-help" class="muted">До 8 МБ. Файл читается в браузере и не отправляется на сервер. Ключ API здесь не нужен.</p>
-  <p id="file-status" role="status" aria-live="polite">Выберите файл, чтобы увидеть результат.</p>
-</section>
-<p class="notice">Содержимое импортированного файла не подтверждает реальный допуск выпуска. Решение принимает security-gate текущего запуска CI; модель даёт только рекомендации.</p>
-<section id="analysis-result" hidden aria-label="Содержимое отчёта">
-  <h2>Состояние проверки</h2>
-  <p id="advisory-source" class="source"></p>
-  <p id="report-gate"></p>
-  <ul id="scan-states" class="scan-states"></ul>
-  <div id="pipeline-errors" hidden>
-    <h3>Незавершённые проверки и ошибки pipeline</h3>
-    <ul id="failure-list"></ul>
+<header class="page-heading">
+  <div><h1>Разбор безопасности</h1><p>Пять проверок. Связанные замечания. Один план исправлений.</p></div>
+  <span class="page-label">ИИ-помощник</span>
+</header>
+<div class="security-workbench">
+  <div class="input-column">
+    {% if assistant_token %}<section class="tools-panel" aria-labelledby="tools-title"><h2 id="tools-title">Отчёты через API</h2><p id="tools-summary">Проверяем подключённые инструменты…</p><button type="button" id="run-tools" class="secondary">Получить отчёты и разобрать</button><a href="/admin">Настроить инструменты и policy</a></section>{% endif %}
+    <section class="input-panel" aria-labelledby="assistant-title">
+      <div class="panel-heading"><h2 id="assistant-title">Новый разбор</h2><span class="format-label">JSON</span></div>
+      {% if assistant_token %}
+      <form id="assistant-form" data-token="{{ assistant_token }}" autocomplete="off">
+        <div class="upload-zone" id="upload-zone">
+          {{ icon('upload') }}
+          <label class="upload-label" for="report-files">Выберите отчёты проверок</label>
+          <p>или перетащите файлы сюда</p>
+          <input type="file" id="report-files" name="reports" accept=".json,application/json" multiple required aria-describedby="reports-help selected-files">
+        </div>
+        <p id="selected-files" class="selected-files" role="status" aria-live="polite">Файлы не выбраны</p>
+        <p id="reports-help" class="field-help">До 5 JSON-файлов по 8 МиБ. Имена файлов должны соответствовать сканерам.</p>
+        <details class="supported-formats"><summary>Какие отчёты поддерживаются?</summary><ul class="format-list"><li><code>gitleaks.json</code><span>Секреты</span></li><li><code>bandit.json</code><span>Python-код</span></li><li><code>pip-audit.json</code><span>Зависимости</span></li><li><code>trivy.json</code><span>Контейнер</span></li><li><code>zap.json</code><span>Приложение</span></li></ul><p class="field-help">Отсутствующий отчёт блокирует допуск.</p></details>
+        <div class="model-option"><label class="check-label" for="use-model"><input type="checkbox" id="use-model" name="use_model"><span>Подключить модель<span class="field-help">Любой OpenAI-совместимый API</span></span></label>{{ icon('key') }}</div>
+        <fieldset id="model-settings" hidden disabled>
+          <legend class="sr-only">OpenAI-совместимый провайдер</legend>
+          <label for="api-base">Адрес API</label>
+          <input id="api-base" name="base_url" type="url" value="https://api.openai.com/v1" maxlength="2000" required spellcheck="false">
+          <label for="api-model">Название модели</label>
+          <input id="api-model" name="model" type="text" maxlength="200" placeholder="Имя модели у провайдера" required spellcheck="false">
+          <label for="api-key">Ключ API</label>
+          <input id="api-key" name="api_key" type="password" maxlength="4096" autocomplete="off" required spellcheck="false" placeholder="Введите ключ" aria-describedby="key-help">
+          <p id="key-help" class="field-help">На один запрос. Ключ не сохраняется и очищается из поля после отправки. Модель получает только выбранные поля замечаний.</p>
+        </fieldset>
+        <button type="submit" id="analyze-button" class="primary-button">Разобрать отчёты{{ icon('arrow') }}</button>
+      </form>
+      <p class="privacy-note">Файлы обрабатывает локальное приложение и удаляет после разбора. Без API работают локальные правила.</p>
+      {% else %}
+      <p class="notice">Загрузка отчётов и ввод ключа доступны при локальном запуске на 127.0.0.1 или localhost. Здесь можно открыть готовый разбор и учебные примеры.</p>
+      {% endif %}
+      <details class="import-analysis"><summary>{{ icon('file') }}Открыть готовый analysis.json</summary><div class="import-body"><label for="analysis-file">Файл готового разбора</label><input type="file" id="analysis-file" name="analysis" accept=".json,application/json" aria-describedby="file-help file-status"><p id="file-help" class="field-help">До 8 МБ. Читается в браузере без отправки на сервер.</p><p id="file-status" role="status" aria-live="polite">Выберите файл, чтобы увидеть результат.</p></div></details>
+    </section>
+    <section class="demo-panel" aria-labelledby="demo-title"><div class="demo-title">{{ icon('play') }}<h2 id="demo-title">Посмотрите на примере</h2></div><p>Как ошибка блокирует выпуск и что меняется после исправления.</p><div class="demo-actions"><button type="button" data-demo="fail" class="secondary">Показать учебную ошибку</button><button type="button" data-demo="fixed" class="text-button">После исправления</button></div><p class="field-help">Синтетические отчёты, без запуска сканеров и модели.</p></section>
   </div>
-  <h2>Порядок исправлений</h2>
-  <p id="no-findings" hidden>Замечаний в файле нет. Проверьте полноту сканов выше.</p>
-  <ol id="recommendations" class="recommendations"></ol>
-</section>
-<noscript><p>Для локального чтения файла включите JavaScript или откройте analysis.md в текстовом редакторе.</p></noscript>
+  <div class="output-column" id="output-column" aria-busy="false">
+    <p id="assistant-status" class="assistant-status" role="status" aria-live="polite"></p>
+    <div id="processing-state" class="processing-state" hidden><span class="processing-spinner" aria-hidden="true"></span><p>Обрабатываем запрос</p><small>Ожидаем ответ локального сервера. Ошибка инструмента не будет принята за успешную проверку.</small></div>
+    <div id="analysis-empty" class="analysis-empty">
+      <div class="empty-graphic" aria-hidden="true"><svg viewBox="0 0 260 150" fill="none"><rect class="graphic-back" x="31" y="22" width="104" height="110" rx="8" transform="rotate(-9 31 22)"/><rect class="graphic-page" x="54" y="16" width="104" height="116" rx="8"/><path class="graphic-line" d="M72 39h32m-32 14h64m-64 12h50"/><rect class="graphic-tag" x="70" y="84" width="70" height="27" rx="5"/><path class="graphic-accent" d="m80 97 5 5 10-11m10 5h24"/><path class="graphic-connector" d="M164 74h30m-6-5 6 5-6 5"/><rect class="graphic-page" x="204" y="42" width="36" height="63" rx="6"/><path class="graphic-accent" d="m214 57 3 3 5-6m-8 20 3 3 5-6m-8 20 3 3 5-6"/></svg></div>
+      <h2>Сначала отчёты.<br>Затем — план действий.</h2>
+      <p>Загрузите результаты проверок. Помощник объединит связанные замечания и предложит, что исправить первым.</p>
+      <span class="empty-caption">Результат появится здесь</span>
+    </div>
+    <section id="analysis-result" hidden aria-label="Содержимое отчёта">
+      <div class="result-topline"><h2>Результат разбора</h2><button type="button" id="download-analysis" class="secondary compact">Скачать JSON</button></div>
+      <p id="analysis-meta" class="result-metadata"></p>
+      <p id="revision-warning" class="revision-warning" role="status" hidden>Настройки изменились после этого разбора. Повторите анализ с текущей policy.</p>
+      <div id="gate-summary" class="gate-summary"><span id="gate-icon" class="gate-icon" aria-hidden="true"></span><div><p id="report-gate"></p><p id="gate-scope" class="field-help"></p></div></div>
+      <ul id="scan-states" class="scan-states" aria-label="Результаты сканеров"></ul>
+      <details id="fetch-details" class="fetch-details" hidden><summary>Получение отчётов по API</summary><ul id="fetch-states"></ul></details>
+      <details id="pipeline-errors" class="pipeline-errors" hidden><summary>Что блокирует допуск</summary><ul id="failure-list"></ul></details>
+      <div class="recommendations-heading"><h2>Порядок исправлений</h2><span id="group-count" class="count-badge"></span></div>
+      <p id="advisory-source" class="source"></p>
+      <p id="no-findings" class="no-findings" hidden>Замечаний в файле нет. Проверьте полноту сканов выше.</p>
+      <ol id="recommendations" class="recommendations"></ol>
+      <p class="result-note">Разбор отражает загруженные данные. Реальный допуск выпуска определяет security-gate текущего запуска CI.</p>
+    </section>
+  </div>
+</div>
+<noscript><p>Включите JavaScript для разбора отчётов или откройте analysis.md в текстовом редакторе.</p></noscript>
 {% endblock %}
