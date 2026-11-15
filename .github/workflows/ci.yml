@@ -1,0 +1,344 @@
+name: Secure build and educational release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      security_demo:
+        description: 'Учебный SAST пример (fail блокирует build/deploy, fixed убирает ошибку)'
+        type: choice
+        options: [none, fail, fixed]
+        default: none
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # Здесь нет pip install, поэтому нет pip cache.
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: '0.17.5'
+          args: check
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: '0.17.5'
+          args: format --check
+
+  tests:
+    name: Pytest and Allure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q --junitxml=test-results/junit.xml --alluredir=allure-results
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tests
+          path: |
+            test-results/
+            allure-results/
+
+  secret-detection:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Scan history and apply policy
+        run: |
+          mkdir -p reports
+          # Findings обрабатывает policy; любой nonzero здесь — ошибка самого сканирования.
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.0 git /repo --redact=100 --exit-code 0 --report-format json --report-path /repo/reports/gitleaks.json
+          python -m security_assistant --reports reports --output scanner-analysis --scanner gitleaks --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-gitleaks
+          path: reports/gitleaks.json
+          if-no-files-found: warn
+
+  sast:
+    name: Bandit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install bandit==1.9.4
+      - name: Prepare optional educational example
+        env:
+          DEMO_CASE: ${{ inputs.security_demo || 'none' }}
+        run: python scripts/security_demo.py --write-example "$RUNNER_TEMP/demo-source" --case "$DEMO_CASE"
+      - name: Scan code and apply policy
+        run: |
+          mkdir -p reports
+          code=0
+          python -m bandit -r app security_assistant scripts "$RUNNER_TEMP/demo-source" -f json -o reports/bandit.json -q || code=$?
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+          python -m security_assistant --reports reports --output scanner-analysis --scanner bandit --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-bandit
+          path: reports/bandit.json
+          if-no-files-found: warn
+
+  sca:
+    name: pip-audit runtime dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pip-audit==2.10.1
+      - name: Audit and apply policy
+        run: |
+          mkdir -p reports
+          # pip-audit не различает findings и некоторые operational errors по exit 1.
+          # Любой nonzero запрещает job; финальный gate всё равно разбирает сохранённый JSON.
+          python -m pip_audit -r requirements.txt -f json -o reports/pip-audit.json --progress-spinner off
+          python -m security_assistant --reports reports --output scanner-analysis --scanner pip-audit --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-pip-audit
+          path: reports/pip-audit.json
+          if-no-files-found: warn
+
+  build:
+    name: Build unreleased image
+    needs: [lint, tests, secret-detection, sast, sca]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          tags: myapp:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/app.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - run: cd /tmp && sha256sum app.tar > app.tar.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-unreleased
+          path: |
+            /tmp/app.tar
+            /tmp/app.tar.sha256
+          retention-days: 1
+
+  scan-image:
+    name: Trivy image vulnerabilities
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v7
+        with:
+          name: image-unreleased
+          path: /tmp
+      - run: |
+          cd /tmp
+          sha256sum -c app.tar.sha256
+          docker load -i app.tar
+          mkdir -p "$GITHUB_WORKSPACE/reports"
+      - uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: myapp:${{ github.sha }}
+          scanners: vuln
+          format: json
+          output: reports/trivy.json
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: 'false'
+          exit-code: '0'
+      - name: Apply policy to all Trivy findings including unfixed
+        run: python -m security_assistant --reports reports --output scanner-analysis --scanner trivy --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-trivy
+          path: reports/trivy.json
+          if-no-files-found: warn
+
+  dast:
+    name: ZAP passive baseline
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v7
+        with:
+          name: image-unreleased
+          path: /tmp
+      - run: |
+          cd /tmp
+          sha256sum -c app.tar.sha256
+          docker load -i app.tar
+          docker run -d --name app -p 127.0.0.1:8000:8000 myapp:${{ github.sha }}
+      - name: Wait for healthy HTTP
+        run: |
+          curl --retry 30 --retry-delay 1 --retry-connrefused --fail --silent --show-error http://127.0.0.1:8000/health
+      - name: ZAP baseline and policy
+        run: |
+          mkdir -p reports
+          chmod 777 reports
+          code=0
+          docker run --rm --network host -v "$PWD/reports:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:2.16.1 zap-baseline.py -t http://127.0.0.1:8000 -J zap.json -m 1 || code=$?
+          # 1/2 — findings/WARN, 3+ — operational failure. Severity decides via policy.
+          if [ "$code" -gt 2 ]; then exit "$code"; fi
+          python -m security_assistant --reports reports --output scanner-analysis --scanner zap --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: report-zap
+          path: reports/zap.json
+          if-no-files-found: warn
+      - name: Cleanup
+        if: always()
+        run: docker rm -f app || true
+
+  security-gate:
+    name: Security gate (required release barrier)
+    if: always()
+    needs: [lint, tests, secret-detection, sast, sca, build, scan-image, dast]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: report-*
+          path: reports
+          merge-multiple: true
+      - name: Verify every required job and execute policy
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python -c 'import json,os; from pathlib import Path; Path("pipeline.json").write_text(json.dumps({k:v["result"] for k,v in json.loads(os.environ["NEEDS_JSON"]).items()}))'
+          python -m security_assistant --reports reports --output gate-analysis --pipeline pipeline.json --gate
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: security-gate
+          path: gate-analysis/
+
+  advisory:
+    name: Advisory (model or explicit fallback)
+    if: always()
+    needs: [lint, tests, secret-detection, sast, sca, build, scan-image, dast]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: report-*
+          path: reports
+          merge-multiple: true
+      - name: Analyze available reports from this run
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          # Даже same-repo PR никогда не получает модельный secret.
+          OPENAI_API_KEY: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') && secrets.OPENAI_API_KEY || '' }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: |
+          python -c 'import json,os; from pathlib import Path; Path("pipeline.json").write_text(json.dumps({k:v["result"] for k,v in json.loads(os.environ["NEEDS_JSON"]).items()}))'
+          python -m security_assistant --reports reports --output analysis --pipeline pipeline.json
+          cat analysis/analysis.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: security-analysis
+          path: analysis/
+
+  deploy:
+    name: Deploy ephemeral educational stand
+    needs: [security-gate]
+    if: needs.security-gate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v7
+        with:
+          name: image-unreleased
+          path: /tmp
+      - name: Deploy the same checked image artifact
+        run: |
+          cd /tmp
+          sha256sum -c app.tar.sha256
+          docker load -i app.tar
+          docker run -d --name deployed-app -p 127.0.0.1:8000:8000 myapp:${{ github.sha }}
+      - name: Health and API smoke with deployment evidence
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          mkdir -p deployment-evidence
+          curl --retry 30 --retry-delay 1 --retry-connrefused --fail --silent --show-error http://127.0.0.1:8000/health
+          python scripts/smoke.py --output deployment-evidence/smoke.json --commit "$COMMIT" --image-id "$(docker inspect --format='{{.Image}}' deployed-app)"
+          cp /tmp/app.tar.sha256 deployment-evidence/
+      - name: Preserve logs
+        if: always()
+        run: |
+          mkdir -p deployment-evidence
+          docker logs deployed-app > deployment-evidence/container.log 2>&1 || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: deployment-evidence
+          path: deployment-evidence/
+      - name: Cleanup ephemeral stand
+        if: always()
+        run: docker rm -f deployed-app || true

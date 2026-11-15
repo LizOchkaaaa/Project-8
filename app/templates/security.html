@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Разбор проверок · Журнал сборки{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='security.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="intro">
+  <h1>Разбор проверок</h1>
+  <p>Связанные замечания из пяти проверок и рекомендуемый порядок исправлений.</p>
+  <p>Скачайте артефакт <strong>security-analysis</strong> из CI или создайте отчёт локально:</p>
+  <pre><code>python -m security_assistant --reports reports --output analysis --offline</code></pre>
+</div>
+<section class="workspace" aria-labelledby="file-title">
+  <h2 id="file-title">Открыть готовый разбор</h2>
+  <label for="analysis-file">Файл analysis.json</label>
+  <input type="file" id="analysis-file" name="analysis" accept=".json,application/json" aria-describedby="file-help file-status">
+  <p id="file-help" class="muted">До 8 МБ. Файл читается в браузере и не отправляется на сервер. Ключ API здесь не нужен.</p>
+  <p id="file-status" role="status" aria-live="polite">Выберите файл, чтобы увидеть результат.</p>
+</section>
+<p class="notice">Содержимое импортированного файла не подтверждает реальный допуск выпуска. Решение принимает security-gate текущего запуска CI; модель даёт только рекомендации.</p>
+<section id="analysis-result" hidden aria-label="Содержимое отчёта">
+  <h2>Состояние проверки</h2>
+  <p id="advisory-source" class="source"></p>
+  <p id="report-gate"></p>
+  <ul id="scan-states" class="scan-states"></ul>
+  <div id="pipeline-errors" hidden>
+    <h3>Незавершённые проверки и ошибки pipeline</h3>
+    <ul id="failure-list"></ul>
+  </div>
+  <h2>Порядок исправлений</h2>
+  <p id="no-findings" hidden>Замечаний в файле нет. Проверьте полноту сканов выше.</p>
+  <ol id="recommendations" class="recommendations"></ol>
+</section>
+<noscript><p>Для локального чтения файла включите JavaScript или откройте analysis.md в текстовом редакторе.</p></noscript>
+{% endblock %}

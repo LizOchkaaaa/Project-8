@@ -1,6 +1,7 @@
 import os
 import threading
-from flask import Flask, jsonify, request, render_template
+
+from flask import Flask, jsonify, render_template, request
 
 MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
@@ -11,6 +12,7 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
     items: list[dict] = []
+    next_id = 1
     lock = threading.Lock()
 
     @app.after_request
@@ -20,8 +22,9 @@ def create_app() -> Flask:
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+            "default-src 'self'; style-src 'self'; script-src 'self'; "
+            "connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'self'; frame-ancestors 'none'"
         )
         response.headers.pop("Server", None)
         return response
@@ -29,6 +32,10 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         return render_template("index.html")
+
+    @app.get("/security")
+    def security():
+        return render_template("security.html")
 
     @app.get("/health")
     def health():
@@ -41,6 +48,7 @@ def create_app() -> Flask:
 
     @app.post("/api/items")
     def create_item():
+        nonlocal next_id
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(error="Ожидается JSON-объект"), 400
@@ -55,7 +63,8 @@ def create_app() -> Flask:
         with lock:
             if len(items) >= MAX_ITEMS:
                 return jsonify(error="Хранилище переполнено"), 507
-            item = {"id": len(items) + 1, "text": text}
+            item = {"id": next_id, "text": text}
+            next_id += 1
             items.append(item)
         return jsonify(item), 201
 
@@ -82,8 +91,8 @@ def create_app() -> Flask:
 
     return app
 
+
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host=os.environ.get("HOST", "127.0.0.1"),
-            port=int(os.environ.get("PORT", "8000")))
+    app.run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))

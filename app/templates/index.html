@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Заметки · Журнал сборки{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='notes.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="intro">
+  <h1>Заметки</h1>
+  <p>Короткие записи для работы над сборкой. До 200 символов в каждой заметке.</p>
+  <p class="muted">Записи общие для этого процесса и исчезают после перезапуска. Не сохраняйте здесь секреты.</p>
+</div>
+<section class="workspace" aria-labelledby="new-note">
+  <h2 id="new-note">Новая заметка</h2>
+  <form id="note-form">
+    <label for="note-text">Текст заметки</label>
+    <textarea id="note-text" name="text" maxlength="200" rows="3" required autocomplete="off"></textarea>
+    <button type="submit">Добавить заметку</button>
+  </form>
+  <p id="note-status" role="status" aria-live="polite">Загружаем заметки…</p>
+  <ul id="notes" class="notes" aria-label="Сохранённые заметки"></ul>
+</section>
+<aside class="next-step">
+  <h2>Проверки сборки</h2>
+  <p>Откройте готовый отчёт, чтобы увидеть связанные замечания и порядок исправлений.</p>
+  <a href="/security">Разбор проверок</a>
+</aside>
+<noscript><p>Для добавления заметок включите JavaScript. API доступен по /api/items.</p></noscript>
+{% endblock %}
