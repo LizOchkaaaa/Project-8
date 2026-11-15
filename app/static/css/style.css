@@ -1,0 +1,92 @@
+body { 
+    font-family: 'Courier New', Courier, monospace;
+    background: #F5F5DC;
+    max-width: 600px; 
+    margin: 40px auto; 
+    padding: 20px; 
+}
+
+h1 { 
+    text-align: center; 
+    color: black;
+}
+
+.input-group { 
+    display: flex; 
+    gap: 10px; 
+    margin-bottom: 20px; 
+}
+
+input[type="text"] { 
+    flex-grow: 1; 
+    padding: 12px; 
+    border: 1px solid #6b430f;
+    background: #FFF8F0;
+    border-radius: 8px; 
+    font-size: 16px; 
+    outline: none; 
+}
+
+input[type="text"]:focus { 
+    background: #FFFFFF;
+}
+
+button { 
+    padding: 12px 20px; 
+    background: #D2B48C;
+    color: black;
+    border: none; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    font-size: 16px; 
+    font-weight: 600;
+    transition: 0.3s; 
+}
+
+button:hover { 
+    color: #FFFFFF;
+}
+
+ul { 
+    list-style: none; 
+    padding: 0; 
+}
+
+li { 
+    background: #FFF8F0;
+    padding: 15px; 
+    margin-bottom: 10px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(74, 59, 50, 0.1);
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-left: 4px solid #D2B48C;
+}
+
+.note-id {
+    margin-right: 15px;
+    color: #888;
+}
+
+.error { 
+    color: #A52A2A;
+    text-align: center; 
+    margin-bottom: 10px; 
+    font-weight: bold; 
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: #A52A2A;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    transition: 0.2s;
+}
+
+.delete-btn:hover {
+    color: #800000;
+    transform: scale(1.2);
+}
