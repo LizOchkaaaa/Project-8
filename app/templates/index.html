@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои заметки</title>
+    <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+    <h1>📝 Заметки</h1>
+    
+    <div class="input-group">
+        <input type="text" id="noteInput" placeholder="Введите текст" maxlength="200">
+        <button onclick="addNote()">Добавить</button>
+    </div>
+    <div id="error" class="error"></div>
+
+    <ul id="notesList"></ul>
+
+    <script src="../static/js/script.js"></script>
+</body>
+</html>

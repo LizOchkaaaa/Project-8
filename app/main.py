@@ -1,6 +1,7 @@
 import os
 import threading
-from flask import Flask, jsonify, request, render_template
+
+from flask import Flask, jsonify, render_template, request
 
 MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
@@ -19,10 +20,22 @@ def create_app() -> Flask:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
+
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+            "default-src 'self'; style-src 'self'; "
+            "script-src 'self'; frame-ancestors 'none'; "
+            "base-uri 'self'; form-action 'self'"
         )
+
+        response.headers["Permissions-Policy"] = (
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+            "magnetometer=(), microphone=(), payment=(), usb=()"
+        )
+
+        response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+
         response.headers.pop("Server", None)
         return response
 
@@ -82,8 +95,11 @@ def create_app() -> Flask:
 
     return app
 
+
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host=os.environ.get("HOST", "127.0.0.1"),
-            port=int(os.environ.get("PORT", "8000")))
+    app.run(
+        host=os.environ.get("HOST", "127.0.0.1"),
+        port=int(os.environ.get("PORT", "8000")),
+    )
