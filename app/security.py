@@ -4,7 +4,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from flask import Blueprint, jsonify, make_response, render_template, request
+from flask import Blueprint, abort, jsonify, make_response, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from app.history import ReportHistory, register_history
@@ -65,11 +65,22 @@ def register_security(app):
     def assistant_context():
         return {"assistant_token": token if local_request() else ""}
 
-    @app.get("/admin")
-    def admin():
+    admin_sections = {
+        "model": "Модель",
+        "connections": "Источники отчётов",
+        "policy": "Правила допуска",
+        "environment": "Лимиты запросов",
+        "mcp": "MCP",
+    }
+
+    @app.get("/admin", defaults={"section": "model"})
+    @app.get("/admin/<section>")
+    def admin(section):
         if not local_request():
             return api_error("forbidden", 403)
-        return render_template("admin.html")
+        if section not in admin_sections:
+            abort(404)
+        return render_template("admin.html", section=section, sections=admin_sections)
 
     @app.route("/api/security/config", methods=["GET", "PUT"])
     def runtime_config():

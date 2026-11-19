@@ -40,34 +40,31 @@ def test_health(client: FlaskClient) -> None:
 
 @allure.story("Test for checking main HTML page")
 def test_index(client: FlaskClient) -> None:
-    """
-    Checks the main HTML page and verifies that it contains the word "Заметки".
-    """
+    response = client.get("/", follow_redirects=True)
+    assert response.request.path == "/security"
+    assert response.status_code == 200
+    assert 'id="workbench"' in response.get_data(as_text=True)
+    assert 'href="/notes"' not in response.get_data(as_text=True)
+    assert "Учебные заметки" in client.get("/notes").get_data(as_text=True)
 
-    with allure.step("Sending a GET request to /"):
-        r = client.get("/")
 
-    with allure.step("Check status HTTP code"):
-        assert r.status_code == 200, f"Expected code 200, but received {r.status_code}"
-        allure.attach(
-            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
-        )
-
-    with allure.step("Check body answer"):
-        assert r.content_type.startswith("text/html"), (
-            f"Expected text/html, but received {r.content_type}"
-        )
-        allure.attach(
-            str(r.content_type), name="Content-Type", attachment_type=allure.attachment_type.TEXT
-        )
-
-        html_content = r.get_data(as_text=True)
-        assert "Заметки" in html_content, (
-            "The word 'Заметки' was not found on the page. The template may not have loaded"
-        )
-        allure.attach(
-            html_content, name="Response HTML", attachment_type=allure.attachment_type.HTML
-        )
+@pytest.mark.parametrize(
+    "page,section",
+    [
+        ("", "model-profile"),
+        ("/connections", "connections"),
+        ("/policy", "policy"),
+        ("/environment", "environment"),
+        ("/mcp", "mcp-settings"),
+    ],
+)
+def test_admin_section(client, page, section):
+    response = client.get("/admin" + page)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert f'<section id="{section}"' in html
+    assert html.count('class="settings-section') == 1
+    assert client.get("/admin" + page, base_url="http://outside.example").status_code == 403
 
 
 @allure.story("Test for checking GET /api/items on an empty storage")

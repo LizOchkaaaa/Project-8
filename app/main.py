@@ -2,7 +2,7 @@ import os
 import threading
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, redirect, render_template, request, send_file
 
 from app.security import register_security
 
@@ -35,6 +35,10 @@ def create_app(*, instance_path=None) -> Flask:
 
     @app.get("/")
     def index():
+        return redirect("/security")
+
+    @app.get("/notes")
+    def notes():
         return render_template("index.html")
 
     @app.get("/security")

@@ -18,8 +18,8 @@ def test_create_delete_gap_create_delete_targets_correct_note():
 
 def test_security_page_keeps_strict_csp_and_safe_rendering():
     client = create_app().test_client()
-    for route in ("/", "/security"):
-        response = client.get(route)
+    for route in ("/", "/security", "/notes"):
+        response = client.get(route, follow_redirects=True)
         assert response.status_code == 200
         html = response.get_data(as_text=True)
         assert 'lang="ru"' in html and 'name="viewport"' in html
@@ -44,4 +44,4 @@ def test_note_xss_stays_json_and_is_not_server_rendered():
     value = '<img src=x onerror="alert(1)">'
     assert client.post("/api/items", json={"text": value}).status_code == 201
     assert client.get("/api/items").json["items"][0]["text"] == value
-    assert value not in client.get("/").get_data(as_text=True)
+    assert value not in client.get("/notes").get_data(as_text=True)

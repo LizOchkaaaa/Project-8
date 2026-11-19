@@ -144,7 +144,7 @@
       drawer.removeAttribute("aria-modal");
     }
     openButton.setAttribute("aria-expanded", String(open));
-    const label = open ? "Закрыть навигацию" : "Открыть навигацию";
+    const label = open ? "Закрыть журнал" : "Открыть журнал";
     openButton.setAttribute("aria-label", label);
     openButton.title = label;
     if (restoreFocus) openButton.focus();
@@ -163,15 +163,7 @@
     if (!open && document.activeElement !== drawerOpener) openButton.focus({ preventScroll: true });
   }
 
-  openButton.hidden = closeButton.hidden = historyPanel.hidden = false;
-  const openJournal = document.getElementById("open-journal");
-  if (openJournal) {
-    openJournal.hidden = false;
-    openJournal.addEventListener("click", () => {
-      setDrawer(true, openJournal);
-      filter?.focus({ preventScroll: true });
-    });
-  }
+  drawer.hidden = openButton.hidden = closeButton.hidden = historyPanel.hidden = false;
   openButton.addEventListener("click", () => setDrawer(openButton.getAttribute("aria-expanded") !== "true"));
   closeButton.addEventListener("click", () => setDrawer(false));
   shade.addEventListener("click", () => setDrawer(false));

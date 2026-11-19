@@ -53,9 +53,6 @@ tabs.forEach((tab, index) => {
     showView(tabs[destinations[event.key]].getAttribute("aria-controls"), true);
   });
 });
-document.querySelectorAll("[data-view]").forEach((button) => {
-  button.addEventListener("click", () => showView(button.dataset.view, true));
-});
 document.getElementById("workspace-actions").addEventListener("keydown", (event) => {
   const menu = event.target.closest("details[open]");
   if (event.key !== "Escape" || !menu) return;
@@ -125,7 +122,9 @@ function validate(data) {
 
 function render(data, groups) {
   currentAnalysis = data;
-  document.getElementById("analysis-empty").hidden = true;
+  tabs[0].parentElement.hidden = false;
+  document.getElementById("intake-caption").hidden = true;
+  document.getElementById("audit-title").textContent = "Результат проверки";
   document.getElementById("analysis-overview").hidden = false;
   const groupCount = document.getElementById("group-count");
   groupCount.textContent = String(groups.size);
@@ -181,7 +180,7 @@ function render(data, groups) {
     const severity = node("span", severityNames[group.severity] + (blockedGroups.has(group) ? " · Блокирует" : ""), "severity " + group.severity);
     summary.append(node("span", "№ " + recommendation.order, "finding-order"), heading, severity);
     const body = node("div", "", "recommendation-body");
-    body.append(node("p", recommendation.reason), node("p", recommendation.action, "action"));
+    body.append(node("h3", data.advisory.mode === "model" ? "Рекомендация модели" : "Рекомендация по локальным правилам"), node("p", recommendation.reason), node("p", recommendation.action, "action"));
     if (group.fixed_versions.length) body.append(node("p", "Исправленные версии: " + group.fixed_versions.join(", ") + ". Проверьте применимость к каждому источнику.", "meta"));
     if (group.evidence.length) {
       body.append(node("h3", "Источники замечания"));
@@ -229,7 +228,10 @@ function resetAnalysis() {
   currentAnalysis = null;
   result.hidden = true;
   result.classList.remove("result-ready");
-  document.getElementById("analysis-empty").hidden = false;
+  tabs[0].parentElement.hidden = true;
+  document.getElementById("intake-caption").hidden = false;
+  document.getElementById("audit-title").textContent = "Проверка выпуска";
+  showView("sources");
   document.getElementById("analysis-overview").hidden = true;
   document.getElementById("group-count").hidden = true;
   document.getElementById("no-findings").hidden = false;
@@ -255,11 +257,11 @@ const validReportId = /^[A-Za-z0-9_-]{1,128}$/;
 let reportRequest = null;
 let reportLocation = new URL(location.href);
 const demoButtons = document.querySelectorAll("[data-demo]");
-const examples = document.getElementById("open-examples");
 const demoMenu = document.getElementById("demo-menu");
 const runToolsButton = document.getElementById("run-tools");
 const submit = document.getElementById("analyze-button");
 let running = false;
+let hasHttpSources = false;
 
 function showStatus(message, error = false, focus = error) {
   assistantStatus.textContent = message;
@@ -428,10 +430,10 @@ async function runAnalysis(url, options, pendingMessage) {
   } finally {
     running = false;
     if (active === selection) processing.hidden = true;
-    if (runToolsButton) runToolsButton.disabled = false;
+    if (runToolsButton) runToolsButton.disabled = !hasHttpSources;
     fileInput.disabled = false;
     demoButtons.forEach((button) => { button.disabled = false; });
-    if (submit) submit.disabled = false;
+    if (submit) submit.disabled = !document.getElementById("report-files").files.length;
   }
 }
 
@@ -440,10 +442,6 @@ demoButtons.forEach((button) => {
     demoMenu.open = false;
     runAnalysis("/api/security/demo/" + button.dataset.demo, {}, "Открываем учебный пример…");
   });
-});
-examples.addEventListener("click", () => {
-  demoMenu.open = true;
-  demoMenu.querySelector("summary").focus();
 });
 
 async function refreshConnections() {
@@ -454,9 +452,13 @@ async function refreshConnections() {
     if (!response.ok) throw new Error("config");
     activeRevision = data.revision;
     const count = scanners.filter((scanner) => data.config.connectors[scanner].enabled).length;
+    hasHttpSources = count > 0;
+    runToolsButton.disabled = running || !hasHttpSources;
     document.getElementById("tools-summary").textContent = count ? "Подключено " + count + " из 5 источников. Получим готовые JSON-отчёты." : "Источники ещё не настроены. Добавьте адреса в настройках стенда.";
     updateRevisionWarning();
   } catch {
+    hasHttpSources = false;
+    runToolsButton.disabled = true;
     document.getElementById("tools-summary").textContent = "Не удалось прочитать настройки. Откройте панель и проверьте конфигурацию.";
   }
 }
@@ -469,16 +471,10 @@ if (runToolsButton) {
 if (assistantForm) {
   const reportFiles = document.getElementById("report-files");
   const uploadZone = document.getElementById("upload-zone");
-  document.getElementById("choose-reports").addEventListener("click", (event) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    showView("sources");
-    reportFiles.focus();
-    reportFiles.click();
-  });
   reportFiles.addEventListener("change", () => {
     reportFiles.removeAttribute("aria-invalid");
     const files = Array.from(reportFiles.files);
+    submit.disabled = running || !files.length;
     const selected = new Set(files.map(reportName));
     for (const scanner of scanners) {
       const cell = document.querySelector(`[data-scanner="${scanner}"] .queue-state`);
@@ -576,6 +572,5 @@ document.getElementById("download-analysis").addEventListener("click", () => {
 });
 
 document.getElementById("workspace-actions").hidden = false;
-examples.hidden = false;
 document.getElementById("workbench").hidden = false;
 if (reportLocation.searchParams.has("report")) openHistoryReport(reportLocation.searchParams.get("report"));

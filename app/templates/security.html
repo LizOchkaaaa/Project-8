@@ -8,13 +8,8 @@
 {% block content %}
 <div class="audit-layout">
   <header class="audit-intro">
-    <h1>Проверка перед<br> выпуском</h1>
-    <p>Соберите отчёты CI в одном месте. Посмотрите, что мешает выпуску, и с какого исправления начать.</p>
-    <div class="audit-intro-actions">
-      {% if assistant_token %}<a class="primary-button" href="/reports/local" id="choose-reports">Добавить отчёты{{ icon('arrow') }}</a>{% endif %}
-      <button type="button" id="open-examples" class="secondary" aria-controls="demo-menu" hidden>Учебный пример</button>
-    </div>
-    {% if assistant_token %}<button type="button" id="open-journal" class="audit-journal" aria-controls="workspace-navigation" hidden>Журнал разборов{{ icon('chevron') }}</button>{% endif %}
+    <h1 id="audit-title">Проверка выпуска</h1>
+    <p>Загрузите JSON-отчёты сканеров CI. Разбор покажет, что блокирует выпуск и где исправить код.</p>
   </header>
   <noscript><p class="notice">Без JavaScript отчёты можно загрузить через <a href="/reports/local">серверную форму</a>.</p></noscript>
 <div id="workbench" hidden>
@@ -34,14 +29,15 @@
   <p id="revision-warning" class="revision-warning" hidden>Настройки изменились после этого разбора. Запустите его заново с действующей политикой.</p>
   <div class="audit-console">
   <div class="workbench-toolbar">
-    <div class="workspace-tabs" role="tablist" aria-label="Представления разбора">
+    <span id="intake-caption">Новый разбор</span>
+    <div hidden class="workspace-tabs" role="tablist" aria-label="Представления разбора">
       <button type="button" id="tab-sources" role="tab" aria-selected="true" aria-controls="sources">Источники</button>
       <button type="button" id="tab-overview" role="tab" aria-selected="false" aria-controls="overview" tabindex="-1">Обзор</button>
       <button type="button" id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" tabindex="-1">Замечания<span id="group-count" class="tab-count" hidden></span></button>
     </div>
   <div id="workspace-actions" class="workspace-actions" hidden>
     <details id="import-analysis" class="work-menu" name="workspace-tools">
-      <summary>{{ icon('file') }}Открыть JSON</summary>
+      <summary>{{ icon('file') }}Открыть готовый разбор</summary>
       <div class="work-menu-body">
         <label for="analysis-file">Готовый разбор (analysis.json)</label>
         <input type="file" id="analysis-file" accept=".json,application/json" aria-describedby="import-help">
@@ -59,7 +55,7 @@
   </div>
   </div>
   <section id="overview" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-overview" hidden>
-    <div id="analysis-empty" class="overview-body"><h2>Разбор ещё не открыт</h2><p>Добавьте отчёты во вкладке «Источники», откройте готовый JSON или выберите учебный пример.</p><button type="button" class="secondary" data-view="sources">Перейти к источникам</button></div>
+
     <div id="analysis-overview" class="overview-body" hidden>
       <p id="analysis-meta" class="result-metadata"></p>
       <div class="overview-section">
@@ -75,7 +71,7 @@
   <section id="sources" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-sources">
     <div class="sources-layout">
       <section class="source-register" aria-labelledby="source-title">
-        <div class="work-section-title source-heading"><h2 id="source-title">Очередь отчётов</h2><span class="sr-only">5 проверок CI</span><span data-scramble aria-hidden="true">5 проверок CI</span></div>
+        <div class="work-section-title source-heading"><h2 id="source-title">Отчёты сканеров</h2><span class="sr-only">5 проверок CI</span><span data-scramble aria-hidden="true">5 проверок CI</span></div>
         <table class="source-table" aria-labelledby="source-title">
           <thead><tr><th scope="col">Проверка</th><th scope="col" class="source-file">Файл</th>{% if assistant_token %}<th scope="col">Загрузка</th>{% endif %}<th scope="col" data-result-column hidden>В разборе</th></tr></thead>
           <tbody>
@@ -87,22 +83,22 @@
         <details id="fetch-details" class="fetch-details" hidden><summary>Журнал получения по HTTP</summary><ul id="fetch-states"></ul></details>
       </section>
       <section class="source-intake" aria-labelledby="assistant-title">
-        <h2 class="sr-only" id="assistant-title">Добавить отчёты</h2>
+        <h2 id="assistant-title">Загрузка отчётов</h2>
         {% if assistant_token %}
         <form id="assistant-form" method="post" data-token="{{ assistant_token }}" autocomplete="off">
           <div class="upload-zone" id="upload-zone">
             {{ icon('upload') }}
-            <label class="upload-label" for="report-files">Выберите или перетащите JSON</label>
+            <label class="upload-label" for="report-files">Выбрать JSON-файлы</label>
             <input type="file" id="report-files" name="reports" accept=".json,application/json" multiple required aria-describedby="reports-help selected-files">
           </div>
-          <p id="reports-help" class="field-help">До 8&nbsp;МиБ на файл. Подойдут имена из очереди и файлы CI: <code>sast.json</code>, <code>sca.json</code>, <code>report.json</code>.</p>
+          <p id="reports-help" class="field-help">Можно перетащить файлы сюда. До 8&nbsp;МиБ на файл. Также принимаются имена из CI: <code>sast.json</code>, <code>sca.json</code>, <code>report.json</code>.</p>
           <p id="selected-files" class="field-help" role="status"></p>
           <details class="model-option">
             <summary>Рекомендации модели</summary>
             <p class="field-help">По умолчанию разбор локальный. При включении провайдер получит только идентификаторы групп, категории, уровни и названия сканеров.</p>
             <label for="model-mode">Подключение</label>
             <select id="model-mode"><option value="profile">Профиль из настроек стенда</option><option value="once">Разовое подключение</option></select>
-            <div id="profile-description"><p class="field-help" id="profile-target" role="status">Читаем настройки модели…</p><a href="/admin#model-profile" class="local-analysis-link">Настроить модель</a> · <button type="button" id="reload-profile" class="secondary compact">Обновить</button></div>
+            <div id="profile-description"><p class="field-help" id="profile-target" role="status">Читаем настройки модели…</p><a href="/admin" class="local-analysis-link">Настроить модель</a> · <button type="button" id="reload-profile" class="secondary compact">Обновить</button></div>
             <input type="hidden" id="profile-revision" name="model_revision" disabled>
             <fieldset id="model-settings" hidden disabled>
               <legend>Разовое подключение</legend>
@@ -115,18 +111,16 @@
             </fieldset>
             <label class="check-label" for="use-model"><input type="checkbox" id="use-model" name="use_model" disabled>Отправить сводку этому провайдеру при разборе</label>
           </details>
-          <button type="submit" id="analyze-button" class="primary-button">Разобрать отчёты{{ icon('arrow') }}</button>
-          <a class="local-analysis-link" href="/reports/local">Разбор без JavaScript</a>
+          <button type="submit" disabled id="analyze-button" class="primary-button">Разобрать отчёты{{ icon('arrow') }}</button>
         </form>
         <details class="tools-panel">
           <summary>Получить по HTTP</summary>
           <p id="tools-summary" class="field-help">Читаем настройки источников…</p>
-          <button type="button" id="run-tools" class="secondary compact">Получить и разобрать</button>
-          <a href="/admin#connections">Настроить источники</a>
+          <button type="button" disabled id="run-tools" class="secondary compact">Получить и разобрать</button>
+          <a href="/admin/connections">Настроить источники</a>
         </details>
         {% else %}
         <p class="field-help">Загрузка и ввод ключа доступны при локальном запуске. Здесь можно открыть готовый JSON или учебный пример.</p>
-        <a class="local-analysis-link" href="/reports/local">Разбор без JavaScript</a>
         {% endif %}
       </section>
     </div>
@@ -138,12 +132,4 @@
   </div>
 </div>
 </div>
-<figure class="audit-landscape">
-  <img src="{{ url_for('static', filename='foggy-woods.jpg') }}" alt="" width="1920" height="646" loading="lazy" decoding="async">
-</figure>
-<section class="audit-method" aria-labelledby="audit-method-title">
-  <h2 id="audit-method-title">Что решает допуск</h2>
-  <p>Порог выпуска проверяет CI. Здесь можно выяснить, каких отчётов не хватает, какое правило сработало и где искать замечание в коде.</p>
-  <a href="/documentation" download="Project-8-guide.docx">Руководство <span>DOCX</span>{{ icon('arrow') }}</a>
-</section>
 {% endblock %}

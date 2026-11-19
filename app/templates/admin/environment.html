@@ -1,0 +1,5 @@
+<section id="environment" class="settings-section" aria-labelledby="environment-title">
+      <div class="settings-heading"><div><h2 id="environment-title">Окружение обработки</h2><p>Лимиты получения отчётов. Системные переменные и команды здесь не изменяются.</p></div></div>
+      <div class="timeout-controls"><div><label for="connect-seconds">Подключение, с</label><input id="connect-seconds" name="connect_seconds" type="number" min="1" max="3" step="1" required></div><div><label for="read-seconds">Ожидание данных, с</label><input id="read-seconds" name="read_seconds" type="number" min="1" max="5" step="1" required></div><div><label for="total-seconds">Бюджет получения, с</label><input id="total-seconds" name="total_seconds" type="number" min="1" max="15" step="1" required></div><div><label for="workers">Параллельных запросов</label><input id="workers" name="workers" type="number" min="1" max="3" step="1" required></div></div>
+      <p class="field-help">До 8 МиБ на отчёт и один полный анализ одновременно. Системный DNS и вычисления Python нельзя принудительно прервать точно по этому бюджету. Стенд рассчитан на один процесс.</p>
+    </section>

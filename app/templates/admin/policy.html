@@ -1,0 +1,10 @@
+<section id="policy" class="settings-section" aria-labelledby="policy-title">
+      <div class="settings-heading"><div><h2 id="policy-title">Порог блокировки</h2><p>Замечание указанной серьёзности или выше блокирует допуск по отчётам.</p></div></div>
+      <div class="policy-controls">
+      {% for scanner, title in [('gitleaks','Gitleaks'),('bandit','Bandit'),('pip-audit','pip-audit'),('trivy','Trivy'),('zap','ZAP')] %}
+        <div><label for="threshold-{{ scanner }}">{{ title }}</label><select id="threshold-{{ scanner }}" name="threshold-{{ scanner }}" {% if scanner == 'gitleaks' %}disabled aria-describedby="mandatory-policy"{% endif %}><option value="low">Низкая</option><option value="medium">Средняя</option><option value="high">Высокая</option><option value="critical">Критическая</option></select></div>
+      {% endfor %}
+      </div>
+      <div id="mandatory-policy" class="mandatory-policy"><h3>Обязательные правила</h3><ul><li>Нужны отчёты всех пяти сканеров, даже если API выключен.</li><li>Секреты, критические замечания и неизвестная серьёзность всегда блокируют допуск.</li><li>Ошибка, таймаут или отсутствующий отчёт означают отказ.</li></ul></div>
+      <p class="field-help">Эти настройки действуют для веб-загрузки, API инструментов и MCP. Выпуск в CI использует версионируемую .security/policy.yml; админ-панель её не изменяет.</p>
+    </section>
