@@ -105,7 +105,9 @@ Allowlist запроса: внутренние IDs групп, severity, scanner
 
 ### Просмотр в приложении
 
-На `/security` выберите `analysis.json` через file picker. Browser File API читает файл локально, без отправки серверу и модельных запросов. Все значения выводятся через `textContent`; evidence URL остаются текстом. Внешние same-origin CSS/JS работают со строгой CSP без unsafe-inline/eval. Есть светлая/тёмная тема, клавиатурный фокус, reduced motion. Импортированный `passed` — содержимое выбранного файла, не разрешение настоящего выпуска. Шрифт Onest хранится локально в app/static/fonts вместе с лицензией OFL; интерфейс не обращается к сервисам шрифтов.
+На `/security` выберите `analysis.json` через «Открыть JSON». Браузер читает файл локально, без отправки серверу и модельных запросов. Все значения выводятся через `textContent`; evidence URL остаются текстом. Внешние same-origin CSS/JS работают со строгой CSP без unsafe-inline/eval. Есть светлая/тёмная тема, клавиатурный фокус, reduced motion. Импортированный `passed` — содержимое выбранного файла, не разрешение настоящего выпуска.
+
+Ресурсы интерфейса хранятся локально: шрифт [Inter](https://rsms.me/inter/) (SIL OFL, лицензия в `app/static/fonts`) и фотография [Foggy woods](https://commons.wikimedia.org/wiki/File:Foggy_woods.jpeg) автора Freedom to share (public domain).
 
 ## Policy и CI
 

@@ -255,6 +255,8 @@ const validReportId = /^[A-Za-z0-9_-]{1,128}$/;
 let reportRequest = null;
 let reportLocation = new URL(location.href);
 const demoButtons = document.querySelectorAll("[data-demo]");
+const examples = document.getElementById("open-examples");
+const demoMenu = document.getElementById("demo-menu");
 const runToolsButton = document.getElementById("run-tools");
 const submit = document.getElementById("analyze-button");
 let running = false;
@@ -435,9 +437,13 @@ async function runAnalysis(url, options, pendingMessage) {
 
 demoButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    document.getElementById("demo-menu").open = false;
+    demoMenu.open = false;
     runAnalysis("/api/security/demo/" + button.dataset.demo, {}, "Открываем учебный пример…");
   });
+});
+examples.addEventListener("click", () => {
+  demoMenu.open = true;
+  demoMenu.querySelector("summary").focus();
 });
 
 async function refreshConnections() {
@@ -463,6 +469,13 @@ if (runToolsButton) {
 if (assistantForm) {
   const reportFiles = document.getElementById("report-files");
   const uploadZone = document.getElementById("upload-zone");
+  document.getElementById("choose-reports").addEventListener("click", (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    showView("sources");
+    reportFiles.focus();
+    reportFiles.click();
+  });
   reportFiles.addEventListener("change", () => {
     reportFiles.removeAttribute("aria-invalid");
     const files = Array.from(reportFiles.files);
@@ -470,7 +483,7 @@ if (assistantForm) {
     for (const scanner of scanners) {
       const cell = document.querySelector(`[data-scanner="${scanner}"] .queue-state`);
       const present = selected.has(scanner + ".json");
-      cell.textContent = present ? "Выбран" : "Не выбран";
+      cell.textContent = present ? "Выбран" : "Нет файла";
       cell.classList.toggle("queued", present);
     }
     const unknown = files.filter((file) => !reportNames.has(reportName(file)));
@@ -563,5 +576,6 @@ document.getElementById("download-analysis").addEventListener("click", () => {
 });
 
 document.getElementById("workspace-actions").hidden = false;
+examples.hidden = false;
 document.getElementById("workbench").hidden = false;
 if (reportLocation.searchParams.has("report")) openHistoryReport(reportLocation.searchParams.get("report"));

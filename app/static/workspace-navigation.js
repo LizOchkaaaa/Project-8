@@ -9,9 +9,10 @@
   const skip = document.querySelector(".skip");
   const mobile = matchMedia("(max-width: 760px)");
   const historyPanel = document.getElementById("workspace-history");
-  let desktopOpen = true;
-  try { desktopOpen = localStorage.getItem("project8-navigation") !== "closed"; } catch {}
+  let desktopOpen = false;
+  try { desktopOpen = localStorage.getItem("project8-navigation") === "open"; } catch {}
   let mobileOpen = false;
+  let drawerOpener = openButton;
 
   const token = historyPanel.dataset.token;
   const filter = document.getElementById("workspace-history-gate");
@@ -150,17 +151,27 @@
     if (open && dirty) loadHistory();
   }
 
-  function setDrawer(open) {
+  function setDrawer(open, trigger = openButton) {
+    if (open) drawerOpener = trigger;
     if (mobile.matches) mobileOpen = open;
     else {
       desktopOpen = open;
       try { localStorage.setItem("project8-navigation", open ? "open" : "closed"); } catch {}
     }
     syncDrawer();
-    (open ? closeButton : openButton).focus({ preventScroll: true });
+    (open ? closeButton : drawerOpener).focus({ preventScroll: true });
+    if (!open && document.activeElement !== drawerOpener) openButton.focus({ preventScroll: true });
   }
 
   openButton.hidden = closeButton.hidden = historyPanel.hidden = false;
+  const openJournal = document.getElementById("open-journal");
+  if (openJournal) {
+    openJournal.hidden = false;
+    openJournal.addEventListener("click", () => {
+      setDrawer(true, openJournal);
+      filter?.focus({ preventScroll: true });
+    });
+  }
   openButton.addEventListener("click", () => setDrawer(openButton.getAttribute("aria-expanded") !== "true"));
   closeButton.addEventListener("click", () => setDrawer(false));
   shade.addEventListener("click", () => setDrawer(false));

@@ -1,30 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Разбор проверок · Project 8{% endblock %}
-{% block location %}Разбор проверок{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='security.js') }}" defer></script>{% endblock %}
+{% block body_attributes %} class="audit-page"{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='audit.css') }}">
+<script src="{{ url_for('static', filename='security.js') }}" defer></script>
+{% endblock %}
 {% block content %}
-<header class="workspace-heading">
-  <div><p class="workspace-caption"><span class="sr-only">Рабочая консоль</span><span data-scramble aria-hidden="true">Рабочая консоль</span></p><h1>Разбор проверок</h1></div>
-  <div id="workspace-actions" class="workspace-actions" hidden>
-    <details id="import-analysis" class="work-menu" name="workspace-tools">
-      <summary>{{ icon('file') }}Открыть JSON</summary>
-      <div class="work-menu-body">
-        <label for="analysis-file">Готовый разбор (analysis.json)</label>
-        <input type="file" id="analysis-file" accept=".json,application/json" aria-describedby="import-help">
-        <p id="import-help" class="field-help">До 8 МиБ. Файл не отправляется на сервер.</p>
-      </div>
-    </details>
-    <details id="demo-menu" class="work-menu" name="workspace-tools">
-      <summary>{{ icon('play') }}Учебный пример</summary>
-      <div class="work-menu-body">
-        <p class="field-help">Синтетические отчёты, без запуска сканеров и модели.</p>
-        <button type="button" data-demo="fail" class="secondary compact">Выпуск заблокирован</button>
-        <button type="button" data-demo="fixed" class="secondary compact">После исправления</button>
-      </div>
-    </details>
-  </div>
-</header>
-<noscript><p class="notice">Чтобы загрузить и разобрать отчёты, откройте <a href="/reports/local">Разбор без JavaScript</a>.</p></noscript>
+<div class="audit-layout">
+  <header class="audit-intro">
+    <h1>Проверка перед<br> выпуском</h1>
+    <p>Соберите отчёты CI в одном месте. Посмотрите, что мешает выпуску, и с какого исправления начать.</p>
+    <div class="audit-intro-actions">
+      {% if assistant_token %}<a class="primary-button" href="/reports/local" id="choose-reports">Добавить отчёты{{ icon('arrow') }}</a>{% endif %}
+      <button type="button" id="open-examples" class="secondary" aria-controls="demo-menu" hidden>Учебный пример</button>
+    </div>
+    {% if assistant_token %}<button type="button" id="open-journal" class="audit-journal" aria-controls="workspace-navigation" hidden>Журнал разборов{{ icon('chevron') }}</button>{% endif %}
+  </header>
+  <noscript><p class="notice">Без JavaScript отчёты можно загрузить через <a href="/reports/local">серверную форму</a>.</p></noscript>
 <div id="workbench" hidden>
   <div id="operation" class="operation" tabindex="-1">
     <span id="processing-state" class="processing-spinner" aria-hidden="true" hidden></span>
@@ -40,10 +32,31 @@
   </section>
   <p id="history-warning" class="revision-warning" role="status" hidden>Разбор готов и доступен для скачивания, но сохранить его в журнале не удалось.</p>
   <p id="revision-warning" class="revision-warning" hidden>Настройки изменились после этого разбора. Запустите его заново с действующей политикой.</p>
-  <div class="workspace-tabs" role="tablist" aria-label="Представления разбора">
-    <button type="button" id="tab-overview" role="tab" aria-selected="false" aria-controls="overview" tabindex="-1">Обзор</button>
-    <button type="button" id="tab-sources" role="tab" aria-selected="true" aria-controls="sources">Источники</button>
-    <button type="button" id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" tabindex="-1">Замечания<span id="group-count" class="tab-count" hidden></span></button>
+  <div class="audit-console">
+  <div class="workbench-toolbar">
+    <div class="workspace-tabs" role="tablist" aria-label="Представления разбора">
+      <button type="button" id="tab-sources" role="tab" aria-selected="true" aria-controls="sources">Источники</button>
+      <button type="button" id="tab-overview" role="tab" aria-selected="false" aria-controls="overview" tabindex="-1">Обзор</button>
+      <button type="button" id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" tabindex="-1">Замечания<span id="group-count" class="tab-count" hidden></span></button>
+    </div>
+  <div id="workspace-actions" class="workspace-actions" hidden>
+    <details id="import-analysis" class="work-menu" name="workspace-tools">
+      <summary>{{ icon('file') }}Открыть JSON</summary>
+      <div class="work-menu-body">
+        <label for="analysis-file">Готовый разбор (analysis.json)</label>
+        <input type="file" id="analysis-file" accept=".json,application/json" aria-describedby="import-help">
+        <p id="import-help" class="field-help">До 8 МиБ. Файл не отправляется на сервер.</p>
+      </div>
+    </details>
+    <details id="demo-menu" class="work-menu" name="workspace-tools">
+      <summary>{{ icon('play') }}Примеры</summary>
+      <div class="work-menu-body">
+        <p class="field-help">Синтетические отчёты, без запуска сканеров и модели.</p>
+        <button type="button" data-demo="fail" class="secondary compact">Выпуск заблокирован</button>
+        <button type="button" data-demo="fixed" class="secondary compact">После исправления</button>
+      </div>
+    </details>
+  </div>
   </div>
   <section id="overview" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-overview" hidden>
     <div id="analysis-empty" class="overview-body"><h2>Разбор ещё не открыт</h2><p>Добавьте отчёты во вкладке «Источники», откройте готовый JSON или выберите учебный пример.</p><button type="button" class="secondary" data-view="sources">Перейти к источникам</button></div>
@@ -62,19 +75,19 @@
   <section id="sources" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-sources">
     <div class="sources-layout">
       <section class="source-register" aria-labelledby="source-title">
-        <div class="work-section-title"><h2 id="source-title">Очередь отчётов</h2><p>Для оценки допуска нужны все пять проверок.</p></div>
+        <div class="work-section-title source-heading"><h2 id="source-title">Очередь отчётов</h2><span class="sr-only">5 проверок CI</span><span data-scramble aria-hidden="true">5 проверок CI</span></div>
         <table class="source-table" aria-labelledby="source-title">
-          <thead><tr><th scope="col">Источник</th>{% if assistant_token %}<th scope="col">В загрузке</th>{% endif %}<th scope="col" data-result-column hidden>В разборе</th></tr></thead>
+          <thead><tr><th scope="col">Проверка</th><th scope="col" class="source-file">Файл</th>{% if assistant_token %}<th scope="col">Загрузка</th>{% endif %}<th scope="col" data-result-column hidden>В разборе</th></tr></thead>
           <tbody>
           {% for scanner, title, category in [('gitleaks','Gitleaks','Секреты'),('bandit','Bandit','Python-код'),('pip-audit','pip-audit','Зависимости'),('trivy','Trivy','Контейнер'),('zap','OWASP ZAP','Веб-приложение')] %}
-            <tr data-scanner="{{ scanner }}"><th scope="row"><span>{{ title }} <small>{{ category }}</small></span><code>{{ scanner }}.json</code></th>{% if assistant_token %}<td class="queue-state">Не выбран</td>{% endif %}<td class="scan-state" data-result-column hidden></td></tr>
+            <tr data-scanner="{{ scanner }}"><th scope="row"><span class="scanner-cell">{{ icon('file') }}<span><span translate="no">{{ title }}</span><small>{{ category }}</small></span></span></th><td class="source-file"><code translate="no">{{ scanner }}.json</code></td>{% if assistant_token %}<td class="queue-state">Нет файла</td>{% endif %}<td class="scan-state" data-result-column hidden></td></tr>
           {% endfor %}
           </tbody>
         </table>
         <details id="fetch-details" class="fetch-details" hidden><summary>Журнал получения по HTTP</summary><ul id="fetch-states"></ul></details>
       </section>
       <section class="source-intake" aria-labelledby="assistant-title">
-        <div class="work-section-title"><h2 id="assistant-title">Добавить отчёты</h2></div>
+        <h2 class="sr-only" id="assistant-title">Добавить отчёты</h2>
         {% if assistant_token %}
         <form id="assistant-form" method="post" data-token="{{ assistant_token }}" autocomplete="off">
           <div class="upload-zone" id="upload-zone">
@@ -82,8 +95,7 @@
             <label class="upload-label" for="report-files">Выберите или перетащите JSON</label>
             <input type="file" id="report-files" name="reports" accept=".json,application/json" multiple required aria-describedby="reports-help selected-files">
           </div>
-          <p id="reports-help" class="field-help">До 8 МиБ на файл. Подойдут имена из очереди и файлы CI: <code>sast.json</code>, <code>sca.json</code>, <code>report.json</code>.</p>
-          <p class="field-help">Готовые разборы сохраняются в локальном журнале стенда; исходные файлы не сохраняются.</p>
+          <p id="reports-help" class="field-help">До 8&nbsp;МиБ на файл. Подойдут имена из очереди и файлы CI: <code>sast.json</code>, <code>sca.json</code>, <code>report.json</code>.</p>
           <p id="selected-files" class="field-help" role="status"></p>
           <details class="model-option">
             <summary>Рекомендации модели</summary>
@@ -106,12 +118,12 @@
           <button type="submit" id="analyze-button" class="primary-button">Разобрать отчёты{{ icon('arrow') }}</button>
           <a class="local-analysis-link" href="/reports/local">Разбор без JavaScript</a>
         </form>
-        <div class="tools-panel">
-          <h3>Получить по HTTP</h3>
+        <details class="tools-panel">
+          <summary>Получить по HTTP</summary>
           <p id="tools-summary" class="field-help">Читаем настройки источников…</p>
           <button type="button" id="run-tools" class="secondary compact">Получить и разобрать</button>
           <a href="/admin#connections">Настроить источники</a>
-        </div>
+        </details>
         {% else %}
         <p class="field-help">Загрузка и ввод ключа доступны при локальном запуске. Здесь можно открыть готовый JSON или учебный пример.</p>
         <a class="local-analysis-link" href="/reports/local">Разбор без JavaScript</a>
@@ -123,5 +135,15 @@
     <p id="no-findings" class="work-section-title">Замечания появятся после разбора.</p>
     <ol id="recommendations" class="recommendations"></ol>
   </section>
+  </div>
 </div>
+</div>
+<figure class="audit-landscape">
+  <img src="{{ url_for('static', filename='foggy-woods.jpg') }}" alt="" width="1920" height="646" loading="lazy" decoding="async">
+</figure>
+<section class="audit-method" aria-labelledby="audit-method-title">
+  <h2 id="audit-method-title">Что решает допуск</h2>
+  <p>Порог выпуска проверяет CI. Здесь можно выяснить, каких отчётов не хватает, какое правило сработало и где искать замечание в коде.</p>
+  <a href="/documentation" download="Project-8-guide.docx">Руководство <span>DOCX</span>{{ icon('arrow') }}</a>
+</section>
 {% endblock %}
