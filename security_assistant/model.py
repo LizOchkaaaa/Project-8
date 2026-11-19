@@ -42,31 +42,19 @@ def endpoint(base):
 
 
 def payload(groups, model):
-    # Явный allowlist. Ни file/target, ни scanner descriptions/code/Match сюда не попадают.
-    compact = [
-        {
-            k: group[k]
-            for k in (
-                "id",
-                "severity",
-                "scanners",
-                "primary_ids",
-                "aliases",
-                "package",
-                "version",
-                "ecosystem",
-                "fixed_versions",
-            )
-        }
-        for group in groups
-    ]
-    for group in compact:
-        if "gitleaks" in group["scanners"]:
-            # У secret findings даже rule/package поля не нужны модели.
-            for field in ("primary_ids", "aliases", "fixed_versions"):
-                group[field] = []
-            for field in ("package", "version", "ecosystem"):
-                group[field] = ""
+    compact = []
+    for group in groups:
+        scanners = group["scanners"]
+        category = "scanner-finding"
+        if "gitleaks" in scanners:
+            category = "possible-secret"
+        elif "pip-audit" in scanners or "trivy" in scanners:
+            category = "dependency"
+        elif "B201" in group["primary_ids"]:
+            category = "flask-debug"
+        elif "B602" in group["primary_ids"]:
+            category = "shell-command"
+        compact.append({"id": group["id"], "scanners": scanners, "severity": group["severity"], "category": category})
     instructions = (
         "Ты помощник разработчика по безопасности. Ответь по-русски только JSON объектом "
         '{"recommendations":[{"group_id":"из входа","order":1,"reason":"причина",'

@@ -136,6 +136,8 @@ def fallback_recommendations(groups):
             action = "Проверьте раскрытие, отзовите действующий секрет, замените его и удалите из истории."
         elif group["package"]:
             action = "Проверьте обновление или замену зависимости и повторите связанные сканы."
+        elif "bandit" in group["scanners"] and "B201" in group["primary_ids"]:
+            action = "Отключите режим отладки Flask в конфигурации выпуска и повторите проверку Bandit."
         elif "bandit" in group["scanners"] and "B602" in group["primary_ids"]:
             action = "Уберите shell=True, передавайте аргументы списком и проверяйте недоверенный ввод. Повторите Bandit."
         else:

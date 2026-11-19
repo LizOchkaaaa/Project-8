@@ -3,7 +3,7 @@ import secrets
 import tempfile
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, make_response, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from app.local_security import api_error, local_request, same_origin
@@ -119,13 +119,38 @@ def register_security(app):
     def analyze_uploads():
         if not authorized():
             return jsonify(error="Анализ доступен только локально со страницы /security."), 403
+        return upload_response()
+
+    @app.route("/reports/local", methods=["GET", "POST"])
+    def local_reports():
+        if not local_request():
+            return api_error("forbidden", 403)
+        if request.method == "GET":
+            return render_template("local_reports.html")
+        request.max_content_length = 5 * MAX_BYTES + 64 * 1024
+        request.max_form_memory_size = 512 * 1024
+        request.max_form_parts = 12
+        origin_ok = same_origin() or (
+            request.headers.get("Origin") == "null"
+            and request.headers.get("Sec-Fetch-Site") == "same-origin"
+        )
+        if not origin_ok or not secrets.compare_digest(request.form.get("token", "").encode(), token.encode()):
+            return api_error("forbidden", 403)
+        response = make_response(upload_response())
+        data = response.get_json()
+        if response.status_code != 200:
+            return render_template("local_reports.html", error=data["error"]), response.status_code
+        return render_template("local_reports.html", result=data, by_group={g["id"]: g for g in data["groups"]})
+
+    def upload_response():
         request.max_content_length = 5 * MAX_BYTES + 64 * 1024
         request.max_form_memory_size = 512 * 1024
         request.max_form_parts = 12
         try:
             with service.admission() as snapshot:
                 files = request.files.getlist("reports")
-                names = [file.filename for file in files]
+                aliases = {"sast.json": "bandit.json", "sca.json": "pip-audit.json", "report.json": "zap.json"}
+                names = [aliases.get(file.filename, file.filename) for file in files]
                 allowed = {f"{scanner}.json" for scanner in SCANNERS}
                 if (
                     not files
@@ -154,13 +179,13 @@ def register_security(app):
                         return jsonify(error="Укажите корректные ключ, адрес API и модель."), 400
                     endpoint(config["OPENAI_BASE_URL"] or "https://api.openai.com/v1")
                 reports = {}
-                for file in files:
+                for filename, file in zip(names, files, strict=True):
                     raw = file.stream.read(MAX_BYTES + 1)
                     if not raw or len(raw) > MAX_BYTES:
                         return jsonify(
                             error="Каждый отчёт должен быть непустым и не больше 8 МиБ."
                         ), 400
-                    reports[file.filename[:-5]] = raw
+                    reports[filename[:-5]] = raw
                 return jsonify(
                     service.process(
                         reports,

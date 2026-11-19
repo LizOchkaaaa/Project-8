@@ -91,6 +91,8 @@ def finding(
         "fixed_versions": fixed or [],
         "title": "Возможное раскрытие секрета"
         if scanner == "gitleaks"
+        else "Flask запущен в режиме отладки"
+        if scanner == "bandit" and rule == "B201"
         else "Запуск команды через shell"
         if scanner == "bandit" and rule == "B602"
         else "Уязвимость зависимости"
