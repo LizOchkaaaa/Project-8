@@ -2,7 +2,7 @@ name: Secure build and educational release
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/review-workspace]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -12,6 +12,11 @@ on:
         type: choice
         options: [none, fail, fixed]
         default: none
+  workflow_call:
+    inputs:
+      security_demo:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -94,7 +99,7 @@ jobs:
       - run: python -m pip install bandit==1.9.4
       - name: Prepare optional educational example
         env:
-          DEMO_CASE: ${{ inputs.security_demo || 'none' }}
+          DEMO_CASE: ${{ inputs.security_demo || (github.event_name == 'push' && github.ref == 'refs/heads/feature/review-workspace' && 'fixed') || 'none' }}
         run: python scripts/security_demo.py --write-example "$RUNNER_TEMP/demo-source" --case "$DEMO_CASE"
       - name: Scan code and apply policy
         run: |
@@ -260,6 +265,9 @@ jobs:
         run: |
           python -c 'import json,os; from pathlib import Path; Path("pipeline.json").write_text(json.dumps({k:v["result"] for k,v in json.loads(os.environ["NEEDS_JSON"]).items()}))'
           python -m security_assistant --reports reports --output gate-analysis --pipeline pipeline.json --gate
+      - name: Check the expected rejection reason
+        if: failure() && inputs.security_demo == 'fail'
+        run: python scripts/security_demo.py --verify-rejection gate-analysis/analysis.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -303,7 +311,7 @@ jobs:
   deploy:
     name: Deploy ephemeral educational stand
     needs: [security-gate]
-    if: needs.security-gate.result == 'success'
+    if: needs.security-gate.result == 'success' && inputs.security_demo != 'fail'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -327,7 +335,9 @@ jobs:
         run: |
           mkdir -p deployment-evidence
           curl --retry 30 --retry-delay 1 --retry-connrefused --fail --silent --show-error http://127.0.0.1:8000/health
-          python scripts/smoke.py --output deployment-evidence/smoke.json --commit "$COMMIT" --image-id "$(docker inspect --format='{{.Image}}' deployed-app)"
+          docker cp scripts/smoke.py deployed-app:/tmp/project8-smoke.py
+          docker exec deployed-app python /tmp/project8-smoke.py --output /tmp/project8-smoke.json --commit "$COMMIT" --image-id "$(docker inspect --format='{{.Image}}' deployed-app)"
+          docker cp deployed-app:/tmp/project8-smoke.json deployment-evidence/smoke.json
           cp /tmp/app.tar.sha256 deployment-evidence/
       - name: Preserve logs
         if: always()

@@ -15,7 +15,10 @@ def test_workflow_release_dependency_graph_and_artifacts():
         uploads = [s for s in jobs[job]["steps"] if "upload-artifact" in s.get("uses", "")]
         assert uploads and all(s.get("if") == "always()" for s in uploads)
     assert jobs["deploy"]["needs"] == ["security-gate"]
-    assert jobs["deploy"]["if"] == "needs.security-gate.result == 'success'"
+    assert (
+        jobs["deploy"]["if"]
+        == "needs.security-gate.result == 'success' && inputs.security_demo != 'fail'"
+    )
     assert "needs" not in jobs["tests"]
     assert workflow["permissions"] == {"contents": "read"}
     for name in ("secret-detection", "sast", "sca", "scan-image", "dast"):
@@ -29,3 +32,20 @@ def test_workflow_release_dependency_graph_and_artifacts():
     env = next(s["env"] for s in jobs["advisory"]["steps"] if "OPENAI_API_KEY" in s.get("env", {}))
     assert "github.event_name == 'push'" in env["OPENAI_API_KEY"]
     assert "github.ref == 'refs/heads/main'" in env["OPENAI_API_KEY"]
+
+
+def test_review_push_uses_same_release_gate_for_the_rejection_rehearsal():
+    directory = Path(__file__).resolve().parent.parent / ".github/workflows"
+    release = yaml.safe_load((directory / "ci.yml").read_text(encoding="utf-8"))
+    rehearsal = yaml.safe_load((directory / "release-rejection.yml").read_text(encoding="utf-8"))
+    branch = "feature/review-workspace"
+    assert branch in release[True]["push"]["branches"]
+    assert rehearsal[True]["push"]["branches"] == [branch]
+    assert rehearsal["jobs"]["reject"] == {
+        "uses": "./.github/workflows/ci.yml",
+        "with": {"security_demo": "fail"},
+    }
+    assert any(
+        "--verify-rejection" in step.get("run", "")
+        for step in release["jobs"]["security-gate"]["steps"]
+    )

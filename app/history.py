@@ -47,14 +47,12 @@ class ReportHistory:
         return report_id
 
     def page(self, gate, offset):
-        where = " WHERE passed = ?" if gate != "all" else ""
-        params = [int(gate == "pass")] if where else []
+        passed = None if gate == "all" else int(gate == "pass")
         with self.connection() as db:
             rows = db.execute(
                 "SELECT id, created_at, source, passed, groups_count, scanners FROM report"
-                + where
-                + " ORDER BY rowid DESC LIMIT ? OFFSET ?",
-                (*params, PAGE_SIZE + 1, offset),
+                " WHERE ? IS NULL OR passed = ? ORDER BY rowid DESC LIMIT ? OFFSET ?",
+                (passed, passed, PAGE_SIZE + 1, offset),
             ).fetchall()
         return {
             "items": [

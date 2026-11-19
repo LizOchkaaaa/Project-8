@@ -55,6 +55,23 @@ def synthetic_reports(directory):
     )
 
 
+def expected_rejection(result):
+    gate = result["gate"]
+    blocked = set(gate["blocked_finding_ids"])
+    return (
+        gate["status"] == "blocked"
+        and gate["scope"] == "pipeline"
+        and any(
+            evidence["id"] in blocked
+            and evidence["scanner"] == "bandit"
+            and evidence["primary_id"] == "B602"
+            and evidence["file"].replace("\\", "/").endswith("/demo-source/example.py")
+            for group in result["groups"]
+            for evidence in group["evidence"]
+        )
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Реальный Bandit fail→pass; остальные отчёты synthetic"
@@ -64,7 +81,14 @@ def main():
         "--write-example", type=Path, help="Только создать пример для реального CI SAST"
     )
     parser.add_argument("--case", choices=("none", "fail", "fixed"), default="none")
+    parser.add_argument("--verify-rejection", type=Path)
     args = parser.parse_args()
+    if args.verify_rejection:
+        result = json.loads(args.verify_rejection.read_text(encoding="utf-8"))
+        if not expected_rejection(result):
+            parser.exit(1, "Не найдено блокирующее замечание учебного Bandit.\n")
+        print("Подтверждено: учебное замечание Bandit заблокировало допуск CI.")
+        return 0
     if args.write_example:
         write_example(args.write_example, args.case)
         return 0
