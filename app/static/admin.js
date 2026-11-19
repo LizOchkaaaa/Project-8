@@ -62,8 +62,8 @@ function collect() {
   }
   return config;
 }
-async function requestConfig(options = {}) {
-  const response = await fetch("/api/security/config", {
+async function requestAdmin(path, options = {}) {
+  const response = await fetch(path, {
     ...options, redirect: "error", credentials: "same-origin",
     headers: { "X-Assistant-Token": form.dataset.token, ...options.headers }
   });
@@ -73,6 +73,9 @@ async function requestConfig(options = {}) {
     throw new Error(message);
   }
   return data;
+}
+function requestConfig(options) {
+  return requestAdmin("/api/security/config", options);
 }
 function setBusy(value) {
   busy = value;
@@ -116,3 +119,72 @@ form.addEventListener("submit", async (event) => {
 reloadButton.addEventListener("click", load);
 window.addEventListener("beforeunload", (event) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
 load();
+
+const profileForm = document.getElementById("model-profile-form");
+const profileFields = document.getElementById("model-profile-fields");
+const profileEndpoint = document.getElementById("model-profile-endpoint");
+const profileName = document.getElementById("model-profile-name");
+const profileTimeout = document.getElementById("model-profile-timeout");
+const profileKey = document.getElementById("model-profile-key");
+const clearProfileKey = document.getElementById("model-profile-clear-key");
+const deleteProfile = document.getElementById("model-profile-delete");
+const profileStatus = document.getElementById("model-profile-status");
+let profileLoaded = false;
+
+function fillProfile(profile) {
+  profileEndpoint.value = profile.endpoint || "";
+  profileName.value = profile.model || "";
+  profileTimeout.value = profile.timeout;
+  profileKey.value = "";
+  profileKey.disabled = false;
+  clearProfileKey.checked = false;
+  clearProfileKey.disabled = !profile.has_api_key;
+  deleteProfile.disabled = !profile.endpoint;
+  const keyState = document.getElementById("model-key-state");
+  keyState.textContent = profile.has_api_key ? "Ключ в памяти" : "Ключ не задан";
+  keyState.className = "status-badge " + (profile.has_api_key ? "success" : "review");
+}
+
+async function updateProfile(options, pendingMessage, successMessage) {
+  profileFields.disabled = true;
+  profileForm.setAttribute("aria-busy", "true");
+  profileStatus.textContent = pendingMessage;
+  profileStatus.className = "admin-status pending";
+  try {
+    fillProfile(await requestAdmin("/api/security/model-profile", options));
+    profileLoaded = true;
+    profileStatus.textContent = successMessage;
+    profileStatus.className = "admin-status success";
+  } catch (error) {
+    profileStatus.textContent = error instanceof Error ? error.message : "Не удалось обновить профиль.";
+    profileStatus.className = "admin-status error";
+    if (!profileLoaded) document.getElementById("model-key-state").textContent = "Состояние ключа неизвестно";
+  } finally {
+    profileFields.disabled = !profileLoaded;
+    profileForm.setAttribute("aria-busy", "false");
+  }
+}
+
+clearProfileKey.addEventListener("change", () => {
+  if (clearProfileKey.checked) profileKey.value = "";
+  profileKey.disabled = clearProfileKey.checked;
+});
+profileForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (profileFields.disabled) return;
+  const data = {
+    endpoint: profileEndpoint.value.trim(),
+    model: profileName.value.trim(),
+    timeout: profileTimeout.valueAsNumber
+  };
+  if (clearProfileKey.checked) data.api_key = "";
+  else if (profileKey.value) data.api_key = profileKey.value;
+  profileKey.value = "";
+  updateProfile({ method: "PUT", body: JSON.stringify(data), headers: { "Content-Type": "application/json" } }, "Сохраняем профиль…", "Профиль сохранён. Проверьте состояние ключа перед разбором.");
+});
+deleteProfile.addEventListener("click", () => {
+  if (!window.confirm("Удалить адрес, модель, тайм-аут и ключ из сохранённого профиля?")) return;
+  profileKey.value = "";
+  updateProfile({ method: "DELETE" }, "Удаляем профиль…", "Профиль и ключ удалены.");
+});
+updateProfile(undefined, "Загружаем профиль…", "Настройки профиля загружены.");

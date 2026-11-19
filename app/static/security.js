@@ -1,11 +1,18 @@
 "use strict";
 
 const fileInput = document.getElementById("analysis-file");
-const fileStatus = document.getElementById("file-status");
 const result = document.getElementById("analysis-result");
 const scanners = ["gitleaks", "bandit", "pip-audit", "trivy", "zap"];
+const scannerNames = { gitleaks: "Gitleaks", bandit: "Bandit", "pip-audit": "pip-audit", trivy: "Trivy", zap: "OWASP ZAP" };
+const reportNames = new Set(scanners.map((scanner) => scanner + ".json"));
+const reportAliases = new Map([["sast.json", "bandit.json"], ["sca.json", "pip-audit.json"], ["report.json", "zap.json"]]);
 const severities = ["critical", "high", "unknown", "medium", "low", "info"];
 const scanLabels = { clean: "без замечаний", findings: "есть замечания", error: "ошибка или нет отчёта" };
+const severityNames = { critical: "Критическая", high: "Высокая", unknown: "Не определена", medium: "Средняя", low: "Низкая", info: "Информация" };
+const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+const resultColumns = document.querySelectorAll("[data-result-column]");
+const recommendationsList = document.getElementById("recommendations");
+const nextFinding = document.getElementById("next-finding");
 let selection = 0;
 let currentAnalysis = null;
 let activeRevision = null;
@@ -24,6 +31,57 @@ function node(tag, value, className) {
   element.textContent = value;
   if (className) element.className = className;
   return element;
+}
+
+function showView(view, focus = false) {
+  for (const tab of tabs) {
+    const panel = tab.getAttribute("aria-controls");
+    const active = panel === view;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    document.getElementById(panel).hidden = !active;
+    if (active && focus) tab.focus();
+  }
+}
+
+tabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => showView(tab.getAttribute("aria-controls")));
+  tab.addEventListener("keydown", (event) => {
+    const destinations = { Home: 0, End: tabs.length - 1, ArrowLeft: (index + tabs.length - 1) % tabs.length, ArrowRight: (index + 1) % tabs.length };
+    if (!Object.hasOwn(destinations, event.key)) return;
+    event.preventDefault();
+    showView(tabs[destinations[event.key]].getAttribute("aria-controls"), true);
+  });
+});
+document.querySelectorAll("[data-view]").forEach((button) => {
+  button.addEventListener("click", () => showView(button.dataset.view, true));
+});
+document.getElementById("workspace-actions").addEventListener("keydown", (event) => {
+  const menu = event.target.closest("details[open]");
+  if (event.key !== "Escape" || !menu) return;
+  menu.open = false;
+  menu.firstElementChild.focus();
+});
+nextFinding.addEventListener("click", () => {
+  const finding = recommendationsList.children[Number(nextFinding.dataset.order) - 1].firstElementChild;
+  showView("findings");
+  finding.open = true;
+  finding.firstElementChild.focus();
+});
+
+function evidenceLocation(evidence) {
+  return (evidence.file || evidence.target || "Место не указано") + (evidence.line ? ":" + evidence.line : "");
+}
+
+function reportName(file) {
+  return reportAliases.get(file.name) || file.name;
+}
+
+function findingContext(group, blockedIds) {
+  const first = group.evidence.find((evidence) => blockedIds.has(evidence.id)) || group.evidence[0];
+  const source = first ? scannerNames[first.scanner] : group.scanners.map((scanner) => scannerNames[scanner]).join(", ");
+  const rule = first?.primary_id || group.primary_ids.join(", ") || "Правило не указано";
+  return [source, rule, first ? evidenceLocation(first) : "Место не указано"].filter(Boolean).join(" / ");
 }
 function validate(data) {
   if (!data || data.schema_version !== 1 || !data.gate || !data.advisory || !data.scans) throw new Error("schema");
@@ -68,56 +126,78 @@ function validate(data) {
 function render(data, groups) {
   currentAnalysis = data;
   document.getElementById("analysis-empty").hidden = true;
-  document.getElementById("group-count").textContent = String(groups.size);
-  document.getElementById("advisory-source").textContent = (data.advisory.mode === "model" ? "Модельный API" : "Локальные правила (fallback)") + ": " + data.advisory.message;
+  document.getElementById("analysis-overview").hidden = false;
+  const groupCount = document.getElementById("group-count");
+  groupCount.textContent = String(groups.size);
+  groupCount.hidden = false;
+  document.getElementById("advisory-source").textContent = (data.advisory.mode === "model" ? "Рекомендации модели" : "Локальные рекомендации") + ": " + data.advisory.message;
   const blocked = data.gate.status === "blocked";
   const review = !blocked && groups.size > 0;
-  document.getElementById("report-gate").textContent = blocked ? "Выпуск заблокирован" : review ? "Порог пройден — нужна проверка" : "Проверки пройдены";
+  document.getElementById("report-gate").textContent = blocked ? (data.gate.scope === "pipeline" ? "Выпуск заблокирован" : "Порог не пройден") : review ? "Допуск пройден, есть замечания" : "Проверки пройдены";
   document.getElementById("gate-summary").className = "gate-summary " + (review ? "review" : data.gate.status);
   document.getElementById("gate-icon").textContent = blocked || review ? "!" : "✓";
-  document.getElementById("gate-scope").textContent = data.gate.scope === "pipeline" ? "Область проверки: pipeline" : "Проверка по отчётам. Фактический выпуск контролирует CI.";
-  const scannerNames = { gitleaks: "Gitleaks", bandit: "Bandit", "pip-audit": "pip-audit", trivy: "Trivy", zap: "ZAP" };
+  const incomplete = scanners.filter((name) => data.scans[name].status === "error").map((name) => scannerNames[name]);
+  document.getElementById("gate-scope").textContent = incomplete.length
+    ? "Нет полных отчётов: " + incomplete.join(", ") + "."
+    : data.gate.scope === "pipeline" ? "Область проверки: pipeline" : "Проверка по отчётам. Фактический выпуск контролирует CI.";
   const blockedIds = new Set(data.gate.blocked_finding_ids);
-  document.getElementById("scan-states").replaceChildren(...scanners.map((scanner) => {
+  const blockedGroups = new Set(Array.from(groups.values()).filter((group) => group.finding_ids.some((id) => blockedIds.has(id))));
+  const blockedScanners = new Set();
+  for (const group of blockedGroups) {
+    for (const evidence of group.evidence) {
+      if (blockedIds.has(evidence.id)) blockedScanners.add(evidence.scanner);
+    }
+  }
+  for (const scanner of scanners) {
     const state = data.scans[scanner];
-    const item = document.createElement("li");
-    item.append(node("span", scannerNames[scanner], "scan-name"));
-    const label = state.status === "clean" ? "Чисто" : state.status === "error" ? "Нет данных" : "Найдено: " + state.count;
-    const status = node("span", label, "scan-state " + state.status);
-    if (Array.from(groups.values()).some((group) => group.scanners.includes(scanner) && group.finding_ids.some((id) => blockedIds.has(id)))) status.classList.add("blocked");
-    status.title = scanLabels[state.status] + ": " + state.count;
-    item.append(status);
-    return item;
-  }));
+    const status = document.querySelector(`[data-scanner="${scanner}"] .scan-state`);
+    const scannerBlocked = blockedScanners.has(scanner);
+    status.className = "scan-state " + state.status + (scannerBlocked ? " blocked" : "");
+    status.textContent = state.status === "clean" ? "Без замечаний" : state.status === "error" ? "Нет корректного отчёта" : "Найдено: " + state.count + (scannerBlocked ? " · Блокирует" : "");
+  }
+  resultColumns.forEach((cell) => { cell.hidden = false; });
   document.getElementById("failure-list").replaceChildren(...data.gate.failures.map((failure) => node("li", failure)));
   document.getElementById("pipeline-errors").hidden = !data.gate.failures.length;
-  const severityNames = { critical: "Критическая", high: "Высокая", unknown: "Не определена", medium: "Средняя", low: "Низкая", info: "Информация" };
+  const first = blocked ? data.advisory.recommendations.find((item) => blockedGroups.has(groups.get(item.group_id))) : data.advisory.recommendations[0];
+  const context = document.getElementById("next-evidence");
+  context.hidden = !first;
+  nextFinding.hidden = !first;
+  if (first) {
+    const group = groups.get(first.group_id);
+    context.textContent = "№ " + first.order + " · " + severityNames[group.severity] + " — " + findingContext(group, blockedIds);
+    nextFinding.dataset.order = first.order;
+  }
+  document.getElementById("next-action").textContent = first ? first.action : blocked
+    ? "Устраните причины отказа и повторите разбор всех пяти отчётов."
+    : "Запустите полный pipeline для текущей версии кода. Разбор отчётов не подтверждает выпуск.";
   const fragment = document.createDocumentFragment();
   for (const recommendation of data.advisory.recommendations) {
     const group = groups.get(recommendation.group_id);
     const li = document.createElement("li");
-    const body = document.createElement("div");
-    body.className = "recommendation-body";
-    const heading = document.createElement("div");
-    heading.className = "finding-heading";
-    heading.append(node("h3", group.package ? group.package + " " + group.version : group.title), node("span", severityNames[group.severity], "severity " + group.severity));
-    const tags = document.createElement("div");
-    tags.className = "finding-tags";
-    tags.append(node("span", group.scanners.map((scanner) => scannerNames[scanner]).join(", ")));
-    if (group.primary_ids.length) tags.append(node("span", group.primary_ids.join(", ")));
-    body.append(heading, tags, node("p", recommendation.reason), node("p", recommendation.action, "action"));
-    if (group.fixed_versions.length) body.append(node("p", "Исправленные версии: " + group.fixed_versions.join(", ") + ". Проверьте применимость к каждому источнику.", "meta"));
     const details = document.createElement("details");
-    details.className = "evidence";
-    details.append(node("summary", "Источники: " + group.evidence.length));
-    const sources = document.createElement("ul");
-    for (const evidence of group.evidence) {
-      sources.append(node("li", evidence.scanner + " / " + evidence.primary_id + "\n" + (evidence.file || evidence.target) + (evidence.line ? ", строка " + evidence.line : "") + (evidence.package ? "\n" + evidence.package + " " + evidence.version : "")));
+    const summary = document.createElement("summary");
+    const heading = node("span", "", "finding-heading");
+    heading.append(node("strong", group.package ? group.package + " " + group.version : group.title), node("span", findingContext(group, blockedIds), "finding-context"));
+    const severity = node("span", severityNames[group.severity] + (blockedGroups.has(group) ? " · Блокирует" : ""), "severity " + group.severity);
+    summary.append(node("span", "№ " + recommendation.order, "finding-order"), heading, severity);
+    const body = node("div", "", "recommendation-body");
+    body.append(node("p", recommendation.reason), node("p", recommendation.action, "action"));
+    if (group.fixed_versions.length) body.append(node("p", "Исправленные версии: " + group.fixed_versions.join(", ") + ". Проверьте применимость к каждому источнику.", "meta"));
+    if (group.evidence.length) {
+      body.append(node("h3", "Источники замечания"));
+      const sources = node("ul", "", "evidence");
+      for (const evidence of group.evidence) {
+        sources.append(node("li", scannerNames[evidence.scanner] + " / " + (evidence.primary_id || "Правило не указано") + " / " + evidenceLocation(evidence) + (evidence.package ? " / " + evidence.package + " " + evidence.version : "")));
+      }
+      body.append(sources);
     }
-    details.append(sources); body.append(details); li.append(body); fragment.append(li);
+    details.append(summary, body);
+    li.append(details);
+    fragment.append(li);
   }
-  document.getElementById("recommendations").replaceChildren(fragment);
+  recommendationsList.replaceChildren(fragment);
   document.getElementById("no-findings").hidden = groups.size > 0;
+  document.getElementById("no-findings").textContent = "В этом разборе нет замечаний. Проверьте результат допуска и наличие всех отчётов во вкладке «Источники».";
   const metadata = [analysisSource];
   if (Number.isSafeInteger(data.duration_ms) && data.duration_ms >= 0 && data.duration_ms <= 3600000) metadata.push("Обработка: " + new Intl.NumberFormat("ru-RU").format(data.duration_ms) + " мс");
   if (typeof data.runtime_revision === "string" && /^(0|[a-f0-9]{32})$/.test(data.runtime_revision)) metadata.push("Настройки: " + data.runtime_revision.slice(0, 8));
@@ -137,12 +217,27 @@ function render(data, groups) {
   }
   document.getElementById("fetch-details").hidden = !fetchStates.childElementCount;
   result.hidden = false;
+  showView("overview");
 }
 
 function resetAnalysis() {
+  reportRequest?.abort();
+  reportRequest = null;
+  retryReport.hidden = true;
+  processing.hidden = true;
+  historyWarning.hidden = true;
   currentAnalysis = null;
   result.hidden = true;
+  result.classList.remove("result-ready");
   document.getElementById("analysis-empty").hidden = false;
+  document.getElementById("analysis-overview").hidden = true;
+  document.getElementById("group-count").hidden = true;
+  document.getElementById("no-findings").hidden = false;
+  document.getElementById("no-findings").textContent = "Замечания появятся после разбора.";
+  recommendationsList.replaceChildren();
+  document.getElementById("fetch-details").hidden = true;
+  resultColumns.forEach((cell) => { cell.hidden = true; });
+  updateRevisionWarning();
   return ++selection;
 }
 
@@ -150,69 +245,187 @@ function updateRevisionWarning() {
   document.getElementById("revision-warning").hidden = !currentAnalysis || !currentAnalysis.runtime_revision || !activeRevision || currentAnalysis.runtime_revision === activeRevision;
 }
 
+const assistantForm = document.getElementById("assistant-form");
+const assistantStatus = document.getElementById("assistant-status");
+const operation = document.getElementById("operation");
+const processing = document.getElementById("processing-state");
+const retryReport = document.getElementById("retry-history-report");
+const historyWarning = document.getElementById("history-warning");
+const validReportId = /^[A-Za-z0-9_-]{1,128}$/;
+let reportRequest = null;
+let reportLocation = new URL(location.href);
+const demoButtons = document.querySelectorAll("[data-demo]");
+const runToolsButton = document.getElementById("run-tools");
+const submit = document.getElementById("analyze-button");
+let running = false;
+
+function showStatus(message, error = false, focus = error) {
+  assistantStatus.textContent = message;
+  operation.classList.toggle("error", error);
+  if (focus) operation.focus();
+}
+
+function revealModelReply() {
+  const action = document.getElementById("next-action");
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !action.animate) return;
+  const message = action.textContent;
+  const visual = node("span", "");
+  visual.setAttribute("aria-hidden", "true");
+  const accessible = node("span", message, "sr-only");
+  action.replaceChildren(accessible, visual);
+  const words = message.split(/(\s+)/u);
+  const animations = [];
+  for (const part of words) {
+    if (!part || /^\s+$/u.test(part)) { visual.append(part); continue; }
+    const word = node("span", part, "reply-word");
+    visual.append(word);
+    animations.push(word.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }],
+      { duration: 170, delay: 440 * animations.length / Math.max(1, Math.ceil(words.length / 2)), fill: "backwards", easing: "ease-out" }).finished);
+  }
+  Promise.allSettled(animations).then(() => { if (visual.parentNode === action) action.textContent = message; });
+}
+
+function showResult(data, { focus = true, findings = false, animate = false } = {}) {
+  render(data, validate(data));
+  showStatus("");
+  if (animate) {
+    result.classList.add("result-ready");
+    if (data.advisory.mode === "model" && data.advisory.recommendations.length) revealModelReply();
+  }
+  if (findings) {
+    showView("findings");
+    const first = recommendationsList.querySelector("details");
+    if (first) {
+      first.open = true;
+      if (focus) first.firstElementChild.focus();
+      return;
+    }
+    if (focus) document.getElementById("tab-findings").focus();
+  } else if (focus) result.focus();
+}
+
+function updateReportLocation(reportId, fromDrawer = false) {
+  const url = new URL(location.href);
+  if (reportId === null) url.searchParams.delete("report");
+  else url.searchParams.set("report", reportId);
+  if (url.hash === "#findings") url.hash = "";
+  if (url.href !== location.href) history.pushState(null, "", url);
+  reportLocation = url;
+  document.dispatchEvent(new CustomEvent("workspace:report-changed", { detail: { fromDrawer } }));
+}
+
+async function openHistoryReport(reportId, focus = false) {
+  const active = resetAnalysis();
+  const token = document.getElementById("workspace-history").dataset.token;
+  if (typeof reportId !== "string" || !validReportId.test(reportId) || !token) {
+    showStatus(!token ? "История доступна только при локальном запуске." : "Некорректная ссылка на сохранённый разбор.", true, focus);
+    return;
+  }
+  const controller = new AbortController();
+  reportRequest = controller;
+  processing.hidden = false;
+  showStatus("Открываем сохранённый разбор…", false, focus);
+  try {
+    const response = await fetch("/api/security/history/" + encodeURIComponent(reportId), {
+      headers: { "X-Assistant-Token": token }, credentials: "same-origin", redirect: "error", signal: controller.signal
+    });
+    if (!response.ok) throw new Error(response.status);
+    const data = await response.json();
+    if (active !== selection) return;
+    analysisSource = "Сохранённый разбор из локальной истории";
+    const findings = location.hash === "#findings";
+    showResult(data, { focus: document.activeElement === operation || (findings && document.activeElement === document.body), findings });
+  } catch (error) {
+    if (active !== selection) return;
+    const forbidden = error.message === "403" || error.message === "401";
+    const missing = error.message === "404";
+    retryReport.hidden = forbidden || missing;
+    showStatus(forbidden ? "Нет доступа к журналу. Откройте локальный стенд или перезагрузите страницу."
+      : missing ? "Разбор не найден в локальной истории." : "Не удалось открыть сохранённый разбор. Попробуйте ещё раз.", true, false);
+  } finally {
+    if (reportRequest === controller) {
+      reportRequest = null;
+      processing.hidden = true;
+    }
+  }
+}
+
+document.getElementById("workspace-history").addEventListener("click", (event) => {
+  const link = event.target.closest("[data-workspace-report]");
+  if (!link || event.defaultPrevented || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  updateReportLocation(link.dataset.workspaceReport, true);
+  openHistoryReport(link.dataset.workspaceReport, true);
+});
+retryReport.addEventListener("click", () => openHistoryReport(reportLocation.searchParams.get("report"), true));
+window.addEventListener("popstate", () => {
+  const previous = reportLocation;
+  reportLocation = new URL(location.href);
+  const reportId = reportLocation.searchParams.get("report");
+  if (previous.searchParams.get("report") === reportId && previous.hash === reportLocation.hash) return;
+  document.dispatchEvent(new Event("workspace:report-changed"));
+  if (reportId !== null) openHistoryReport(reportId);
+  else if (previous.searchParams.has("report")) {
+    resetAnalysis();
+    showStatus("");
+    showView("sources");
+  }
+});
+
 fileInput.addEventListener("change", async () => {
-  const current = ++selection;
-  analysisSource = "Импорт файла. Происхождение и свежесть не подтверждены";
-  result.hidden = true;
-  document.getElementById("analysis-empty").hidden = false;
   const file = fileInput.files[0];
-  if (!file) { fileStatus.textContent = "Выберите файл, чтобы увидеть результат."; return; }
-  fileStatus.textContent = "Читаем и проверяем файл…";
+  if (!file || running) return;
+  fileInput.value = "";
+  updateReportLocation(null);
+  const current = resetAnalysis();
+  analysisSource = "Локальный импорт. Происхождение и свежесть не подтверждены";
+  showStatus("Читаем и проверяем файл…");
   try {
     if (!file.size || file.size > 8 * 1024 * 1024) throw new Error("size");
     const data = JSON.parse(await file.text());
     if (current !== selection) return;
-    const groups = validate(data);
-    render(data, groups);
-    fileStatus.textContent = "Файл открыт локально. Рекомендации доступны ниже.";
+    showResult(data);
+    document.getElementById("import-analysis").open = false;
   } catch {
     if (current !== selection) return;
-    result.hidden = true;
-    fileStatus.textContent = "Не удалось открыть файл. Выберите analysis.json версии 1 размером до 8 МБ, созданный помощником.";
+    showStatus("Не удалось открыть файл. Выберите analysis.json версии 1 размером до 8 МиБ, созданный помощником.", true);
   }
 });
-
-const assistantForm = document.getElementById("assistant-form");
-const assistantStatus = document.getElementById("assistant-status");
-const demoButtons = document.querySelectorAll("[data-demo]");
-const runToolsButton = document.getElementById("run-tools");
-let running = false;
 
 async function runAnalysis(url, options, pendingMessage) {
   if (running) return;
   running = true;
   analysisSource = url.includes("/demo/") ? "Учебный синтетический пример" : url.includes("/tools/") ? "Отчёты HTTP API. Свежесть сканов не подтверждена" : "Загруженные отчёты";
-  const current = resetAnalysis();
-  assistantStatus.textContent = pendingMessage;
-  assistantStatus.classList.remove("error");
-  document.getElementById("processing-state").hidden = false;
-  document.getElementById("output-column").setAttribute("aria-busy", "true");
+  updateReportLocation(null);
+  const active = resetAnalysis();
+  processing.hidden = false;
+  showStatus(pendingMessage);
+  operation.focus();
   if (runToolsButton) runToolsButton.disabled = true;
   fileInput.disabled = true;
   demoButtons.forEach((button) => { button.disabled = true; });
-  const submit = document.getElementById("analyze-button");
   if (submit) submit.disabled = true;
   try {
     const response = await fetch(url, { ...options, redirect: "error", credentials: "same-origin" });
     const data = await response.json();
     if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : data.error && typeof data.error.message === "string" ? data.error.message : "Не удалось выполнить анализ.");
-    if (current !== selection) return;
-    render(data, validate(data));
+    const realAnalysis = options.method === "POST";
+    const reportId = response.headers.get("X-Report-Id");
+    const unavailable = response.headers.get("X-Report-History") === "unavailable";
+    const saved = realAnalysis && !unavailable && reportId && validReportId.test(reportId);
+    if (active === selection) {
+      showResult(data, { animate: realAnalysis, focus: !document.getElementById("workspace-navigation").contains(document.activeElement) });
+      if (saved) updateReportLocation(reportId);
+      historyWarning.hidden = !realAnalysis || !unavailable;
+    }
+    if (saved) document.dispatchEvent(new Event("workspace:history-changed"));
     if (assistantForm) refreshConnections();
-    assistantStatus.textContent = "";
-    result.tabIndex = -1;
-    result.focus({ preventScroll: true });
-    if (window.matchMedia("(max-width: 760px)").matches) result.scrollIntoView({ block: "start" });
   } catch (error) {
-    if (current !== selection) return;
-    result.hidden = true;
-    assistantStatus.classList.add("error");
-    assistantStatus.textContent = error instanceof Error && error.message.length < 300
-      ? error.message : "Не удалось выполнить анализ. Проверьте файлы и доступность приложения.";
+    if (active === selection) showStatus(error instanceof Error && error.message.length < 300 && error.message !== "schema" && !(error instanceof SyntaxError)
+      ? error.message : "Не удалось выполнить анализ. Проверьте файлы и доступность приложения.", true);
   } finally {
     running = false;
-    document.getElementById("processing-state").hidden = true;
-    document.getElementById("output-column").setAttribute("aria-busy", "false");
+    if (active === selection) processing.hidden = true;
     if (runToolsButton) runToolsButton.disabled = false;
     fileInput.disabled = false;
     demoButtons.forEach((button) => { button.disabled = false; });
@@ -222,6 +435,7 @@ async function runAnalysis(url, options, pendingMessage) {
 
 demoButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    document.getElementById("demo-menu").open = false;
     runAnalysis("/api/security/demo/" + button.dataset.demo, {}, "Открываем учебный пример…");
   });
 });
@@ -250,11 +464,18 @@ if (assistantForm) {
   const reportFiles = document.getElementById("report-files");
   const uploadZone = document.getElementById("upload-zone");
   reportFiles.addEventListener("change", () => {
-    if (!running) resetAnalysis();
     reportFiles.removeAttribute("aria-invalid");
     const files = Array.from(reportFiles.files);
-    document.getElementById("selected-files").textContent = files.length
-      ? files.map((file) => file.name).join(", ") : "Файлы не выбраны";
+    const selected = new Set(files.map(reportName));
+    for (const scanner of scanners) {
+      const cell = document.querySelector(`[data-scanner="${scanner}"] .queue-state`);
+      const present = selected.has(scanner + ".json");
+      cell.textContent = present ? "Выбран" : "Не выбран";
+      cell.classList.toggle("queued", present);
+    }
+    const unknown = files.filter((file) => !reportNames.has(reportName(file)));
+    document.getElementById("selected-files").textContent = unknown.length
+      ? "Не распознаны: " + unknown.map((file) => file.name).join(", ") : files.length ? "Выбрано файлов: " + files.length : "";
   });
   uploadZone.addEventListener("dragenter", () => uploadZone.classList.add("drag-over"));
   for (const eventName of ["dragleave", "drop", "dragend"]) {
@@ -263,29 +484,65 @@ if (assistantForm) {
   const useModel = document.getElementById("use-model");
   const settings = document.getElementById("model-settings");
   const keyInput = document.getElementById("api-key");
-  useModel.addEventListener("change", () => {
-    settings.hidden = !useModel.checked;
-    settings.disabled = !useModel.checked;
-    if (!useModel.checked) keyInput.value = "";
+  const mode = document.getElementById("model-mode");
+  const profileTarget = document.getElementById("profile-target");
+  const revision = document.getElementById("profile-revision");
+  let profileReady = false;
+  let loadId = 0;
+  function syncModelFields() {
+    const once = mode.value === "once";
+    settings.hidden = !once;
+    settings.disabled = !once;
+    for (const field of settings.querySelectorAll("input")) field.required = once && useModel.checked;
+    document.getElementById("profile-description").hidden = once;
+    useModel.disabled = !once && !profileReady;
+    revision.disabled = once || !useModel.checked;
+  }
+  async function loadProfile() {
+    const id = ++loadId;
+    profileReady = false;
+    if (mode.value === "profile") useModel.checked = false;
+    syncModelFields();
+    try {
+      const response = await fetch("/api/security/model-profile", { headers: { "X-Assistant-Token": assistantForm.dataset.token }, credentials: "same-origin", redirect: "error" });
+      if (!response.ok) throw new Error();
+      const p = await response.json();
+      if (id !== loadId) return;
+      revision.value = p.revision;
+      profileReady = Boolean(p.has_api_key && p.model && p.revision);
+      profileTarget.textContent = [p.model || "Модель не выбрана", p.endpoint || "адрес не задан", `ожидание ${p.timeout} с`, p.has_api_key ? "ключ задан" : "ключ не задан"].join(" · ");
+    } catch {
+      if (id !== loadId) return;
+      revision.value = "";
+      profileTarget.textContent = "Не удалось прочитать профиль. Доступен локальный разбор.";
+    }
+    syncModelFields();
+  }
+  mode.addEventListener("change", () => {
+    useModel.checked = false;
+    keyInput.value = "";
+    syncModelFields();
   });
-  assistantForm.addEventListener("invalid", () => {
-    if (!running) resetAnalysis();
+  settings.addEventListener("input", () => { useModel.checked = false; syncModelFields(); });
+  useModel.addEventListener("change", syncModelFields);
+  document.getElementById("reload-profile").addEventListener("click", loadProfile);
+  loadProfile();
+  assistantForm.addEventListener("invalid", (event) => {
+    if (settings.contains(event.target)) settings.closest("details").open = true;
   }, true);
   assistantForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (running) return;
-    resetAnalysis();
     const files = Array.from(document.getElementById("report-files").files);
-    const allowed = scanners.map((scanner) => scanner + ".json");
-    if (!files.length || files.length > 5 || new Set(files.map((file) => file.name)).size !== files.length
-      || files.some((file) => !allowed.includes(file.name) || !file.size || file.size > 8 * 1024 * 1024)) {
-      assistantStatus.textContent = "Выберите до пяти разных непустых JSON-файлов с именами сканеров, до 8 МиБ каждый.";
+    if (!files.length || files.length > 5 || new Set(files.map(reportName)).size !== files.length
+      || files.some((file) => !reportNames.has(reportName(file)) || !file.size || file.size > 8 * 1024 * 1024)) {
       reportFiles.setAttribute("aria-invalid", "true");
-      document.getElementById("selected-files").textContent = assistantStatus.textContent;
+      document.getElementById("selected-files").textContent = "Выберите до пяти разных непустых JSON-файлов с именами сканеров, до 8 МиБ каждый.";
       reportFiles.focus();
       return;
     }
     const body = new FormData(assistantForm);
+    if (!useModel.checked) for (const name of ["api_key", "base_url", "model", "model_revision"]) body.delete(name);
     keyInput.value = "";
     runAnalysis("/api/security/analyze", {
       method: "POST", body, headers: { "X-Assistant-Token": assistantForm.dataset.token }
@@ -304,3 +561,7 @@ document.getElementById("download-analysis").addEventListener("click", () => {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+
+document.getElementById("workspace-actions").hidden = false;
+document.getElementById("workbench").hidden = false;
+if (reportLocation.searchParams.has("report")) openHistoryReport(reportLocation.searchParams.get("report"));

@@ -10,8 +10,8 @@ MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
 
 
-def create_app() -> Flask:
-    app = Flask(__name__)
+def create_app(*, instance_path=None) -> Flask:
+    app = Flask(__name__, instance_path=instance_path or os.environ.get("PROJECT8_INSTANCE_DIR"))
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
     register_security(app)
 

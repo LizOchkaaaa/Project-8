@@ -14,6 +14,7 @@ from .policy import fallback_recommendations
 MAX_RESPONSE = 256 * 1024
 MAX_REQUEST = 128 * 1024
 TIMEOUT = 15
+MAX_PROFILE_TIMEOUT = 120
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -54,7 +55,14 @@ def payload(groups, model):
             category = "flask-debug"
         elif "B602" in group["primary_ids"]:
             category = "shell-command"
-        compact.append({"id": group["id"], "scanners": scanners, "severity": group["severity"], "category": category})
+        compact.append(
+            {
+                "id": group["id"],
+                "scanners": scanners,
+                "severity": group["severity"],
+                "category": category,
+            }
+        )
     instructions = (
         "Ты помощник разработчика по безопасности. Ответь по-русски только JSON объектом "
         '{"recommendations":[{"group_id":"из входа","order":1,"reason":"причина",'
@@ -144,6 +152,11 @@ def recommend(groups, offline=False, *, config=None):
         return fallback("OPENAI_MODEL не задан или некорректен: детерминированные рекомендации.")
     try:
         url = endpoint(settings.get("OPENAI_BASE_URL") or "https://api.openai.com/v1")
+        profile_timeout = config.get("OPENAI_TIMEOUT") if config is not None else None
+        if profile_timeout is not None and (
+            type(profile_timeout) is not int or not 1 <= profile_timeout <= MAX_PROFILE_TIMEOUT
+        ):
+            raise ValueError("Invalid model timeout")
         body = payload(groups, model)
         if len(body) > MAX_REQUEST:
             return fallback(
@@ -159,9 +172,12 @@ def recommend(groups, offline=False, *, config=None):
                 "Accept": "application/json",
             },
         )
-        opener = urllib.request.build_opener(NoRedirect())
+        handlers = [NoRedirect()]
+        if profile_timeout is not None:
+            handlers.append(urllib.request.ProxyHandler({}))
+        opener = urllib.request.build_opener(*handlers)
         # endpoint проверен выше; redirects отключены обработчиком NoRedirect.
-        with opener.open(request, timeout=TIMEOUT) as response:  # nosec B310
+        with opener.open(request, timeout=profile_timeout or TIMEOUT) as response:  # nosec B310
             if response.status != 200:
                 return fallback("API вернул ошибку: детерминированные рекомендации.")
             raw = response.read(MAX_RESPONSE + 1)

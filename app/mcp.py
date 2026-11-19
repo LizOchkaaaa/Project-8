@@ -3,6 +3,7 @@
 import json
 import os
 import secrets
+import sqlite3
 from urllib.parse import urlsplit
 
 from flask import jsonify, request
@@ -119,7 +120,7 @@ def configured_origins():
     return tuple(allowed)
 
 
-def register_mcp(app, service):
+def register_mcp(app, service, history):
     token = os.environ.get("PROJECT8_MCP_TOKEN", "")
     enabled = (
         bool(token)
@@ -178,7 +179,21 @@ def register_mcp(app, service):
                     if name == "run_tools"
                     else service.process(reports, snapshot)
                 )
-                return tool_result(value)
+                sources = (
+                    [
+                        k
+                        for k, v in value["tool_fetch"]["connectors"].items()
+                        if v["status"] == "fetched"
+                    ]
+                    if name == "run_tools"
+                    else reports
+                )
+                result = tool_result(value)
+                try:
+                    result["_meta"] = {"reportId": history.save(value, "mcp", sources)}
+                except (OSError, sqlite3.Error):
+                    result["_meta"] = {"history": "unavailable"}
+                return result
         except ConfigError:
             return tool_result(
                 {
