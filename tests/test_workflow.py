@@ -45,7 +45,9 @@ def test_review_push_uses_same_release_gate_for_the_rejection_rehearsal():
         "uses": "./.github/workflows/ci.yml",
         "with": {"security_demo": "fail"},
     }
-    assert any(
-        "--verify-rejection" in step.get("run", "")
+    verification = next(
+        step
         for step in release["jobs"]["security-gate"]["steps"]
+        if "--verify-rejection" in step.get("run", "")
     )
+    assert verification["if"] == "always() && inputs.security_demo == 'fail'"

@@ -58,6 +58,18 @@
 .source-intake :is(.local-analysis-link, .tools-panel a) { display: block; width: fit-content; }
 .source-intake #selected-files:empty { display: none; }
 .audit-layout:has(#analysis-result:not([hidden])) .audit-intro p { display: none; }
+.audit-kicker { margin: 0; color: var(--muted); font: 10px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.audit-page .result-strip { flex-wrap: wrap; gap: 16px 24px; padding: 16px; border-color: var(--audit-line); border-radius: 12px; background: var(--paper); }
+.result-decision { flex: 1 1 290px; min-width: 0; }
+.result-decision .audit-kicker { margin-bottom: 8px; }
+.result-decision h2 { font-size: 18px; font-weight: 500; line-height: 1.25; }
+.result-decision .field-help { margin-top: 3px; }
+.result-totals { display: flex; flex-wrap: wrap; gap: 10px 0; margin: 0; }
+.result-totals > div { padding-inline: 14px; border-inline-start: 1px solid var(--audit-line); }
+.result-totals dt { color: var(--muted); font-size: 11px; }
+.result-totals dd { margin: 2px 0 0; font-size: 20px; font-weight: 500; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.audit-console .overview-body { padding: 0; }
+.audit-console .overview-section:first-of-type { border-top: 0; }
 .audit-page main { max-width: 1280px; padding-bottom: 32px; }
 @container audit-console (min-width: 610px) {
   .audit-console .sources-layout { grid-template-columns: minmax(0, 1.45fr) minmax(220px, 1fr); }
@@ -74,6 +86,8 @@
 @media (max-width: 760px) {
   .audit-page main { padding-top: 28px; }
   .audit-console .primary-button, #download-analysis, .work-menu > summary, .source-intake details > summary { min-height: 44px; }
+  .result-decision { flex-basis: 100%; }
+  .result-totals > div:first-child { border-inline-start: 0; padding-inline-start: 0; }
 }
 @container audit-console (max-width: 340px) {
   .source-file { display: none; }

@@ -266,7 +266,7 @@ jobs:
           python -c 'import json,os; from pathlib import Path; Path("pipeline.json").write_text(json.dumps({k:v["result"] for k,v in json.loads(os.environ["NEEDS_JSON"]).items()}))'
           python -m security_assistant --reports reports --output gate-analysis --pipeline pipeline.json --gate
       - name: Check the expected rejection reason
-        if: failure() && inputs.security_demo == 'fail'
+        if: always() && inputs.security_demo == 'fail'
         run: python scripts/security_demo.py --verify-rejection gate-analysis/analysis.json
       - uses: actions/upload-artifact@v7
         if: always()

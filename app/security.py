@@ -317,7 +317,7 @@ def demo(case):
     if case == "fail":
         reports["bandit"]["results"] = [
             {
-                "test_id": "B602",
+                "test_id": "B324",
                 "issue_severity": "HIGH",
                 "filename": "demo/example.py",
                 "line_number": 4,

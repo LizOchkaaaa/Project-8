@@ -11,12 +11,15 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke ephemeral учебного стенда")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--image-id", required=True)
+    parser.add_argument("--image-id")
+    parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535")
 
     def request(path, method="GET", data=None, headers=None):
         req = urllib.request.Request(
-            "http://127.0.0.1:8000" + path,
+            f"http://127.0.0.1:{args.port}" + path,
             method=method,
             data=data
             if isinstance(data, bytes)
@@ -75,13 +78,13 @@ def main():
     ):
         raise RuntimeError("Incomplete report must be blocked and saved in the journal")
     status, stored, _ = request(f"/api/security/history/{report_id}", headers=token_header)
-    if status != 200 or json.loads(stored)["result"] != json.loads(report):
+    if status != 200 or json.loads(stored) != json.loads(report):
         raise RuntimeError("Report journal smoke failed")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(
             {
-                "deployment": "ephemeral educational runner",
+                "deployment": "ephemeral educational runner" if args.image_id else "local process",
                 "commit": args.commit,
                 "image_id": args.image_id,
                 "checks": checks
@@ -93,7 +96,7 @@ def main():
         + "\n",
         encoding="utf-8",
     )
-    print("Ephemeral учебный стенд: HTTP/API smoke пройден.")
+    print("Учебный стенд: HTTP/API smoke пройден.")
 
 
 if __name__ == "__main__":

@@ -95,6 +95,8 @@ def finding(
         if scanner == "bandit" and rule == "B201"
         else "Запуск команды через shell"
         if scanner == "bandit" and rule == "B602"
+        else "Слабая хеш-функция"
+        if scanner == "bandit" and rule == "B324"
         else "Уязвимость зависимости"
         if scanner in {"pip-audit", "trivy"}
         else "Замечание проверки безопасности",

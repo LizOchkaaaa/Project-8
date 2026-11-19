@@ -14,13 +14,11 @@ from security_assistant.__main__ import main as analyze  # noqa: E402
 
 def write_example(directory, case):
     directory.mkdir(parents=True, exist_ok=True)
-    code = "def example():\n    return 'Учебный исправленный пример'\n"
-    if case == "fail":
-        # Строка превращается в код только во временном файле для Bandit; функция не вызывается.
-        code = (
-            "import subprocess\n\ndef example(command):\n"
-            "    subprocess.run(command, shell=True, check=True)\n"
-        )
+    algorithm = "md5" if case == "fail" else "sha256"
+    # Только статический пример на фиксированной строке; приложение его не импортирует.
+    code = (
+        f"import hashlib\n\ndef example():\n    return hashlib.{algorithm}(b'demo').hexdigest()\n"
+    )
     (directory / "example.py").write_text(code, encoding="utf-8")
 
 
@@ -64,7 +62,7 @@ def expected_rejection(result):
         and any(
             evidence["id"] in blocked
             and evidence["scanner"] == "bandit"
-            and evidence["primary_id"] == "B602"
+            and evidence["primary_id"] == "B324"
             and evidence["file"].replace("\\", "/").endswith("/demo-source/example.py")
             for group in result["groups"]
             for evidence in group["evidence"]

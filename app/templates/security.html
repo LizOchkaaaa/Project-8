@@ -9,7 +9,7 @@
 <div class="audit-layout">
   <header class="audit-intro">
     <h1 id="audit-title">Проверка выпуска</h1>
-    <p>Загрузите JSON-отчёты сканеров CI. Разбор покажет, что блокирует выпуск и где исправить код.</p>
+    <p>Загрузите отчёты CI, чтобы увидеть блокировки и порядок исправлений.</p>
   </header>
   <noscript><p class="notice">Без JavaScript отчёты можно загрузить через <a href="/reports/local">серверную форму</a>.</p></noscript>
 <div id="workbench" hidden>
@@ -19,14 +19,22 @@
     <button type="button" id="retry-history-report" class="secondary compact" hidden>Повторить</button>
   </div>
   <section id="analysis-result" class="result-strip" tabindex="-1" aria-labelledby="report-gate" hidden>
-    <div id="gate-summary" class="gate-summary">
-      <span id="gate-icon" aria-hidden="true"></span>
-      <div><h2 id="report-gate"></h2><p id="gate-scope" class="field-help"></p></div>
+    <div class="result-decision">
+      <p id="result-origin" class="audit-kicker"></p>
+      <div id="gate-summary" class="gate-summary">
+        <span id="gate-icon" aria-hidden="true"></span>
+        <div><h2 id="report-gate"></h2><p id="gate-scope" class="field-help"></p></div>
+      </div>
     </div>
-    <button type="button" id="download-analysis" class="secondary compact">{{ icon('file') }}Скачать JSON</button>
+    <dl class="result-totals">
+      <div><dt>Отчёты</dt><dd id="report-total"></dd></div>
+      <div><dt>Группы</dt><dd id="group-total"></dd></div>
+      <div><dt>Блокируют</dt><dd id="blocked-total"></dd></div>
+    </dl>
+    <button type="button" id="download-analysis" class="secondary compact" aria-label="Скачать текущий разбор в JSON">{{ icon('file') }}Скачать JSON</button>
   </section>
   <p id="history-warning" class="revision-warning" role="status" hidden>Разбор готов и доступен для скачивания, но сохранить его в журнале не удалось.</p>
-  <p id="revision-warning" class="revision-warning" hidden>Настройки изменились после этого разбора. Запустите его заново с действующей политикой.</p>
+  <p id="revision-warning" class="revision-warning" hidden>Этот разбор сделан с другой версией локальных настроек. Чтобы проверить текущие пороги, загрузите отчёты заново.</p>
   <div class="audit-console">
   <div class="workbench-toolbar">
     <span id="intake-caption">Новый разбор</span>
@@ -37,18 +45,18 @@
     </div>
   <div id="workspace-actions" class="workspace-actions" hidden>
     <details id="import-analysis" class="work-menu" name="workspace-tools">
-      <summary>{{ icon('file') }}Открыть готовый разбор</summary>
+      <summary>{{ icon('file') }}Открыть разбор</summary>
       <div class="work-menu-body">
         <label for="analysis-file">Готовый разбор (analysis.json)</label>
         <input type="file" id="analysis-file" accept=".json,application/json" aria-describedby="import-help">
-        <p id="import-help" class="field-help">До 8 МиБ. Файл не отправляется на сервер.</p>
+        <p id="import-help" class="field-help">Файл из артефакта CI <code>security-analysis</code> или сохранённый разбор. До 8&nbsp;МиБ, без отправки на сервер.</p>
       </div>
     </details>
     <details id="demo-menu" class="work-menu" name="workspace-tools">
-      <summary>{{ icon('play') }}Примеры</summary>
+      <summary>{{ icon('play') }}Учебный сценарий</summary>
       <div class="work-menu-body">
-        <p class="field-help">Синтетические отчёты, без запуска сканеров и модели.</p>
-        <button type="button" data-demo="fail" class="secondary compact">Выпуск заблокирован</button>
+        <p class="field-help">Сравните пороги на синтетических отчётах. Сканеры и модель здесь не запускаются.</p>
+        <button type="button" data-demo="fail" class="secondary compact">До исправления</button>
         <button type="button" data-demo="fixed" class="secondary compact">После исправления</button>
       </div>
     </details>
@@ -57,21 +65,21 @@
   <section id="overview" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-overview" hidden>
 
     <div id="analysis-overview" class="overview-body" hidden>
-      <p id="analysis-meta" class="result-metadata"></p>
+      <p id="analysis-meta" class="result-metadata" hidden></p>
+      <section id="pipeline-errors" class="overview-section" aria-labelledby="pipeline-title" hidden><h2 id="pipeline-title">Что мешает допуску</h2><ul id="failure-list"></ul></section>
       <div class="overview-section">
         <h2>Следующий шаг</h2>
         <p id="next-action"></p>
         <p id="next-evidence" class="first-evidence" hidden></p>
         <button type="button" id="next-finding" class="secondary compact" hidden>Открыть замечание</button>
       </div>
-      <section id="pipeline-errors" class="overview-section" aria-labelledby="pipeline-title" hidden><h2 id="pipeline-title">Условия допуска не выполнены</h2><ul id="failure-list"></ul></section>
       <p id="advisory-source" class="result-metadata"></p>
     </div>
   </section>
   <section id="sources" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-sources">
     <div class="sources-layout">
       <section class="source-register" aria-labelledby="source-title">
-        <div class="work-section-title source-heading"><h2 id="source-title">Отчёты сканеров</h2><span class="sr-only">5 проверок CI</span><span data-scramble aria-hidden="true">5 проверок CI</span></div>
+        <div class="work-section-title source-heading"><h2 id="source-title">Отчёты сканеров</h2><span>5 источников CI</span></div>
         <table class="source-table" aria-labelledby="source-title">
           <thead><tr><th scope="col">Проверка</th><th scope="col" class="source-file">Файл</th>{% if assistant_token %}<th scope="col">Загрузка</th>{% endif %}<th scope="col" data-result-column hidden>В разборе</th></tr></thead>
           <tbody>

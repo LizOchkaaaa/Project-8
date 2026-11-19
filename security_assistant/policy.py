@@ -142,6 +142,8 @@ def fallback_recommendations(groups):
             )
         elif "bandit" in group["scanners"] and "B602" in group["primary_ids"]:
             action = "Уберите shell=True, передавайте аргументы списком и проверяйте недоверенный ввод. Повторите Bandit."
+        elif "bandit" in group["scanners"] and "B324" in group["primary_ids"]:
+            action = "Замените слабую хеш-функцию с учётом назначения. Для контрольной суммы подойдёт SHA-256. Повторите Bandit."
         else:
             action = "Проверьте правило и место замечания, исправьте причину и повторите скан."
         if not group["fixed_versions"] and group["package"]:

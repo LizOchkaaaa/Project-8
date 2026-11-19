@@ -64,7 +64,8 @@ def test_demo_and_document_download(web):
     fail = client.get("/api/security/demo/fail").get_json()
     fixed = client.get("/api/security/demo/fixed").get_json()
     assert fail["gate"]["status"] == "blocked"
-    assert fail["groups"][0]["primary_ids"] == ["B602"]
+    assert fail["groups"][0]["primary_ids"] == ["B324"]
+    assert "SHA-256" in fail["advisory"]["recommendations"][0]["action"]
     assert fixed["gate"]["status"] == "passed"
     assert all(state["status"] == "clean" for state in fixed["scans"].values())
     assert "синтетические" in fail["advisory"]["message"]

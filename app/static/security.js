@@ -131,16 +131,23 @@ function render(data, groups) {
   groupCount.hidden = false;
   document.getElementById("advisory-source").textContent = (data.advisory.mode === "model" ? "Рекомендации модели" : "Локальные рекомендации") + ": " + data.advisory.message;
   const blocked = data.gate.status === "blocked";
+  const pipeline = data.gate.scope === "pipeline";
   const review = !blocked && groups.size > 0;
-  document.getElementById("report-gate").textContent = blocked ? (data.gate.scope === "pipeline" ? "Выпуск заблокирован" : "Порог не пройден") : review ? "Допуск пройден, есть замечания" : "Проверки пройдены";
+  document.getElementById("report-gate").textContent = blocked
+    ? (pipeline ? "Допуск CI заблокирован" : "По отчётам допуск не пройден")
+    : (pipeline ? "Допуск CI пройден" : "Отчёты прошли пороги");
   document.getElementById("gate-summary").className = "gate-summary " + (review ? "review" : data.gate.status);
   document.getElementById("gate-icon").textContent = blocked || review ? "!" : "✓";
-  const incomplete = scanners.filter((name) => data.scans[name].status === "error").map((name) => scannerNames[name]);
-  document.getElementById("gate-scope").textContent = incomplete.length
-    ? "Нет полных отчётов: " + incomplete.join(", ") + "."
-    : data.gate.scope === "pipeline" ? "Область проверки: pipeline" : "Проверка по отчётам. Фактический выпуск контролирует CI.";
+  const validReports = scanners.filter((name) => ["clean", "findings"].includes(data.scans[name].status)).length;
+  document.getElementById("gate-scope").textContent = pipeline
+    ? "По данным импортированного файла. Развёртывание проверяется отдельно."
+    : "Разбор файлов не подтверждает развёртывание в CI.";
+  document.getElementById("result-origin").textContent = analysisSource;
+  document.getElementById("report-total").textContent = validReports + "/" + scanners.length;
+  document.getElementById("group-total").textContent = String(groups.size);
   const blockedIds = new Set(data.gate.blocked_finding_ids);
   const blockedGroups = new Set(Array.from(groups.values()).filter((group) => group.finding_ids.some((id) => blockedIds.has(id))));
+  document.getElementById("blocked-total").textContent = String(blockedGroups.size);
   const blockedScanners = new Set();
   for (const group of blockedGroups) {
     for (const evidence of group.evidence) {
@@ -167,8 +174,9 @@ function render(data, groups) {
     nextFinding.dataset.order = first.order;
   }
   document.getElementById("next-action").textContent = first ? first.action : blocked
-    ? "Устраните причины отказа и повторите разбор всех пяти отчётов."
-    : "Запустите полный pipeline для текущей версии кода. Разбор отчётов не подтверждает выпуск.";
+    ? "Устраните причины отказа и повторите проверку."
+    : pipeline ? "Проверьте этап Deploy в том же запуске GitHub Actions."
+      : "Проверьте итоговый барьер выпуска в GitHub Actions.";
   const fragment = document.createDocumentFragment();
   for (const recommendation of data.advisory.recommendations) {
     const group = groups.get(recommendation.group_id);
@@ -197,10 +205,12 @@ function render(data, groups) {
   recommendationsList.replaceChildren(fragment);
   document.getElementById("no-findings").hidden = groups.size > 0;
   document.getElementById("no-findings").textContent = "В этом разборе нет замечаний. Проверьте результат допуска и наличие всех отчётов во вкладке «Источники».";
-  const metadata = [analysisSource];
+  const metadata = [];
   if (Number.isSafeInteger(data.duration_ms) && data.duration_ms >= 0 && data.duration_ms <= 3600000) metadata.push("Обработка: " + new Intl.NumberFormat("ru-RU").format(data.duration_ms) + " мс");
   if (typeof data.runtime_revision === "string" && /^(0|[a-f0-9]{32})$/.test(data.runtime_revision)) metadata.push("Настройки: " + data.runtime_revision.slice(0, 8));
-  document.getElementById("analysis-meta").textContent = metadata.join(". ");
+  const meta = document.getElementById("analysis-meta");
+  meta.textContent = metadata.join(" · ");
+  meta.hidden = !metadata.length;
   updateRevisionWarning();
   const fetchStates = document.getElementById("fetch-states");
   fetchStates.replaceChildren();
@@ -382,7 +392,7 @@ fileInput.addEventListener("change", async () => {
   fileInput.value = "";
   updateReportLocation(null);
   const current = resetAnalysis();
-  analysisSource = "Локальный импорт. Происхождение и свежесть не подтверждены";
+  analysisSource = "Импортированный разбор";
   showStatus("Читаем и проверяем файл…");
   try {
     if (!file.size || file.size > 8 * 1024 * 1024) throw new Error("size");
@@ -399,7 +409,7 @@ fileInput.addEventListener("change", async () => {
 async function runAnalysis(url, options, pendingMessage) {
   if (running) return;
   running = true;
-  analysisSource = url.includes("/demo/") ? "Учебный синтетический пример" : url.includes("/tools/") ? "Отчёты HTTP API. Свежесть сканов не подтверждена" : "Загруженные отчёты";
+  analysisSource = url.endsWith("/demo/fail") ? "Учебный сценарий / до исправления" : url.endsWith("/demo/fixed") ? "Учебный сценарий / после исправления" : url.includes("/tools/") ? "Отчёты из HTTP-источников" : "Загрузка файлов";
   updateReportLocation(null);
   const active = resetAnalysis();
   processing.hidden = false;
