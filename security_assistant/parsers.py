@@ -307,10 +307,8 @@ def load_json(path, limit=MAX_BYTES):
         raise ReportError("Отчёт отсутствует или не является обычным файлом")
     with path.open("rb") as stream:
         raw = stream.read(limit + 1)
-    if not raw or len(raw) > limit:
-        raise ReportError("Отчёт пуст или превышает лимит размера")
     try:
-        return json.loads(raw)
+        return strict_json(raw, limit)
     except (ValueError, UnicodeError, RecursionError) as exc:
         raise ReportError("Некорректный JSON") from exc
 

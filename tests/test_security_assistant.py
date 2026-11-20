@@ -157,6 +157,7 @@ def test_sca_different_package_version_ecosystem_remain_separate(reports):
         "[]",
         "{}",
         '{"dependencies": []}',
+        '{"dependencies": [], "dependencies": [{"name":"x","version":"1","vulns":[]}]}',
         '{"dependencies": [{"name":"x","skip_reason":"error"}]}',
     ],
 )
@@ -182,6 +183,26 @@ def test_size_count_and_operational_failures(reports, tmp_path):
     data["zap"]["site"] = []
     _, states = read_reports(write())
     assert all(states[name]["status"] == "error" for name in ("gitleaks", "bandit", "trivy", "zap"))
+
+
+def test_cli_cannot_treat_null_pipeline_as_reports_only(reports, tmp_path):
+    _, write = reports
+    pipeline = tmp_path / "jobs.json"
+    pipeline.write_text("null", encoding="utf-8")
+    assert (
+        main(
+            [
+                "--reports",
+                str(write()),
+                "--output",
+                str(tmp_path / "out"),
+                "--pipeline",
+                str(pipeline),
+                "--gate",
+            ]
+        )
+        == 2
+    )
 
 
 def test_gate_unknown_unfixed_thresholds_pipeline_and_policy(reports, tmp_path):

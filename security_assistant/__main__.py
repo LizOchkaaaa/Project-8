@@ -92,6 +92,8 @@ def main(argv=None):
         if args.scanner:
             policy = {**policy, "required_scanners": [args.scanner]}
         pipeline = load_json(args.pipeline, 16000) if args.pipeline else None
+        if args.pipeline and not isinstance(pipeline, dict):
+            raise ReportError("Некорректный отчёт о стадиях CI")
         analysis = analyze(
             args.reports,
             offline=args.offline or args.gate,

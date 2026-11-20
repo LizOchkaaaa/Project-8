@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .analysis import analyze
 from .connectors import fetch_all
-from .parsers import MAX_BYTES, SCANNERS, strict_json
+from .parsers import MAX_BYTES, SCANNERS
 from .policy import validate_policy
 
 ANALYSIS_GATE = threading.BoundedSemaphore(1)
@@ -42,10 +42,6 @@ class AnalysisService:
             for name, raw in reports.items():
                 if not raw or len(raw) > MAX_BYTES:
                     raise ValueError("Invalid report size")
-                try:
-                    strict_json(raw, MAX_BYTES)
-                except (ValueError, TypeError, RecursionError):
-                    raw = b"!"  # Preserve the parser's fail-closed invalid-report state.
                 (Path(directory) / f"{name}.json").write_bytes(raw)
             result = analyzer(
                 directory,
