@@ -34,13 +34,15 @@ def test_workflow_release_dependency_graph_and_artifacts():
     assert "github.ref == 'refs/heads/main'" in env["OPENAI_API_KEY"]
 
 
-def test_review_push_uses_same_release_gate_for_the_rejection_rehearsal():
+def test_rejection_rehearsal_runs_the_same_gate_on_a_separate_branch():
     directory = Path(__file__).resolve().parent.parent / ".github/workflows"
     release = yaml.safe_load((directory / "ci.yml").read_text(encoding="utf-8"))
     rehearsal = yaml.safe_load((directory / "release-rejection.yml").read_text(encoding="utf-8"))
-    branch = "feature/review-workspace"
-    assert branch in release[True]["push"]["branches"]
-    assert rehearsal[True]["push"]["branches"] == [branch]
+    release_branches = release[True]["push"]["branches"]
+    rehearsal_branches = rehearsal[True]["push"]["branches"]
+    assert "feature/review-workspace" in release_branches
+    assert rehearsal_branches == ["demo/release-rejection"]
+    assert set(release_branches).isdisjoint(rehearsal_branches)
     assert rehearsal["jobs"]["reject"] == {
         "uses": "./.github/workflows/ci.yml",
         "with": {"security_demo": "fail"},

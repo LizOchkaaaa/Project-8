@@ -2,7 +2,7 @@ name: Release rehearsal (expected rejection)
 
 on:
   push:
-    branches: [feature/review-workspace]
+    branches: [demo/release-rejection]
 
 permissions:
   contents: read

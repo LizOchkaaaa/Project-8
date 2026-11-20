@@ -152,7 +152,16 @@ python -X utf8 scripts/security_demo.py --output demo-output
 
 Скрипт записывает временный пример: MD5 от фиксированной учебной строки, затем SHA-256. Код примера не исполняется. Bandit находит слабый хеш (`B324`), та же политика, что в CI, даёт `BLOCK`, а после исправления — `PASS`. В `demo-output/fail` и `fixed` сохраняются исходник, отчёт Bandit и `analysis/analysis.json`. Остальные четыре отчёта синтетические: этот прогон подтверждает работу SAST и порогов, но не сборку и развёртывание.
 
-Для полного испытания в GitHub Actions предусмотрены два сценария одного конвейера. `security_demo=fail` должен дать отказ Bandit и финального gate именно по учебной находке. Сборка и развёртывание должны пропуститься. `security_demo=fixed` запускает все реальные проверки и выпускает тот же проверенный образ на временный стенд только после успешного gate. Push в `feature/review-workspace` запускает оба сценария отдельно. Ручной запуск доступен, когда `ci.yml` с `workflow_dispatch` есть в ветке по умолчанию.
+Для полного испытания в GitHub Actions предусмотрены два сценария одного конвейера. `security_demo=fail` должен дать отказ Bandit и финального gate именно по учебной находке. Сборка и развёртывание должны пропуститься. `security_demo=fixed` запускает все реальные проверки и выпускает тот же проверенный образ на временный стенд только после успешного gate. Push в `feature/review-workspace` запускает только основной конвейер с исправленным примером. Отказ запускается отдельно при push в `demo/release-rejection`. Для первой репетиции создайте отдельный коммит, чтобы результаты отказа относились к нему:
+
+```bash
+git switch -c demo/release-rejection feature/review-workspace
+git commit --allow-empty -m "Run rejection rehearsal"
+git push -u origin demo/release-rejection
+git switch feature/review-workspace
+```
+
+Ручной запуск через Actions доступен, когда `ci.yml` с `workflow_dispatch` есть в ветке по умолчанию.
 
 ### Что показать на защите
 
