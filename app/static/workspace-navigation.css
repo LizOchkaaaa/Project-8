@@ -65,16 +65,10 @@ html { scroll-padding-top: 80px; }
 .workspace-ready .app-shell { transition: margin-left 180ms ease; }
 .workspace-ready:not(.drawer-open) .app-shell { margin-left: 0; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 13px 13px 17px; }
-.workspace-brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 17px; font-weight: 690; line-height: 1.2; letter-spacing: -.025em; }
-.workspace-brand:hover { text-decoration: none; }
-.workspace-brand img { flex: none; }
-.workspace-brand small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 450; letter-spacing: 0; }
 .shell-icon-button { min-width: 36px; min-height: 36px; flex: none; padding: 6px; background: transparent; color: var(--muted); }
 .shell-icon-button:hover, .shell-icon-button[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
 .drawer-scroll { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 4px 12px 15px; }
-.drawer-label { color: var(--muted); margin: 0 9px 4px; font-size: 11px; font-weight: 600; }
-.workspace-links { display: grid; gap: 2px; }
-.workspace-links a, .drawer-foot a, .drawer-foot .theme-toggle {
+.drawer-foot a, .drawer-foot .theme-toggle {
   display: flex;
   width: auto;
   align-items: center;
@@ -87,10 +81,8 @@ html { scroll-padding-top: 80px; }
   font-size: 13px;
   font-weight: 500;
 }
-.workspace-links a:hover, .drawer-foot a:hover, .drawer-foot .theme-toggle:hover { background: var(--subtle); text-decoration: none; }
-.workspace-links .icon, .drawer-foot .icon { color: var(--muted); width: 16px; height: 16px; }
-.workspace-links a[aria-current] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
-.workspace-links a[aria-current] .icon { color: inherit; }
+.drawer-foot a:hover, .drawer-foot .theme-toggle:hover { background: var(--subtle); text-decoration: none; }
+.drawer-foot .icon { color: var(--muted); width: 16px; height: 16px; }
 .drawer-foot { border-top: 1px solid var(--line); padding: 5px 12px; display: grid; }
 .drawer-foot small { margin-left: auto; color: var(--muted); font-size: 10px; }
 .drawer-foot .theme-toggle { background: transparent; }
@@ -98,8 +90,6 @@ html { scroll-padding-top: 80px; }
 
 .workspace-history { margin-top: 13px; padding-top: 9px; border-top: 1px solid var(--line); }
 .history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 8px; }
-.history-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 660; }
-.history-head h2 .icon { width: 15px; height: 15px; color: var(--muted); }
 #workspace-history-gate { width: 100%; min-height: 36px; margin: 4px 0 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; color: var(--text); background: var(--paper); }
 .history-status { margin: 7px 2px 8px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .history-list { display: grid; gap: 5px; list-style: none; margin: 0; padding: 0; }
@@ -122,7 +112,7 @@ button.history-more { width: 100%; margin-top: 8px; }
   .topbar-nav #workspace-open { min-width: 44px; }
   .drawer-modal { overflow: hidden; }
   .workspace-shade { position: fixed; inset: 0; z-index: 11; background: #16121b80; }
-  .workspace-links a, .drawer-foot a, .drawer-foot .theme-toggle, .shell-icon-button, #workspace-history-gate { min-height: 44px; }
+  .drawer-foot a, .drawer-foot .theme-toggle, .shell-icon-button, #workspace-history-gate { min-height: 44px; }
   .shell-icon-button { min-width: 44px; }
 }
 
@@ -130,7 +120,7 @@ button.history-more { width: 100%; margin-top: 8px; }
 body { background: var(--canvas); }
 .settings-section, .input-panel, .result-panel { background: var(--paper); }
 .page-heading h1 { font-size: 28px; line-height: 1.2; font-weight: 400; letter-spacing: -.84px; }
-.result-metadata, .history-row-detail, .drawer-label { font-family: ui-monospace, Consolas, monospace; }
+.result-metadata, .history-row-detail { font-family: ui-monospace, Consolas, monospace; }
 .workspace-panel { background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; padding: 0 clamp(12px, 2vw, 24px) 24px; }
 .result-strip, .settings-section, .input-panel, .result-panel { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: clamp(14px, 2vw, 24px); }
 .source-table thead th { font-weight: 400; }

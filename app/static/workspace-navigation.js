@@ -202,25 +202,4 @@
 
   document.body.classList.add("workspace-ready");
   syncDrawer();
-
-  const caption = document.querySelector("[data-scramble]");
-  const motion = matchMedia("(prefers-reduced-motion: reduce)");
-  if (!caption || motion.matches) return;
-  try {
-    if (sessionStorage.getItem("project8-caption-seen")) return;
-    sessionStorage.setItem("project8-caption-seen", "1");
-  } catch {}
-  const label = caption.textContent;
-  const alphabet = "АБВГДЖЗКЛМНПРСТФХ";
-  let resolved = 0;
-  const timer = setInterval(() => {
-    resolved += 2;
-    if (motion.matches || resolved >= label.length) {
-      caption.textContent = label;
-      clearInterval(timer);
-      return;
-    }
-    caption.textContent = Array.from(label, (letter, index) => index < resolved || letter === " "
-      ? letter : alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-  }, 35);
 })();
