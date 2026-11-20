@@ -25,6 +25,10 @@ def test_security_page_keeps_strict_csp_and_safe_rendering():
         assert 'lang="ru"' in html and 'name="viewport"' in html
         assert "unsafe-inline" not in response.headers["Content-Security-Policy"]
         assert "unsafe-eval" not in response.headers["Content-Security-Policy"]
+        assert "camera=()" in response.headers["Permissions-Policy"]
+        assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
+        assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+        assert response.headers["Cross-Origin-Resource-Policy"] == "same-origin"
         assert 'aria-live="polite"' in html
     for filename in ("notes.js", "security.js"):
         js = client.get("/static/" + filename).get_data(as_text=True)
