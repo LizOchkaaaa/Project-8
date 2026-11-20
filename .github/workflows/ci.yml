@@ -222,7 +222,7 @@ jobs:
           docker run -d --name app -p 127.0.0.1:8000:8000 myapp:${{ github.sha }}
       - name: Wait for healthy HTTP
         run: |
-          curl --retry 30 --retry-delay 1 --retry-connrefused --fail --silent --show-error http://127.0.0.1:8000/health
+          curl --retry 30 --retry-delay 1 --retry-all-errors --retry-max-time 30 --max-time 2 --fail --silent --show-error http://127.0.0.1:8000/health
       - name: ZAP baseline and policy
         run: |
           mkdir -p reports
@@ -238,6 +238,9 @@ jobs:
           name: report-zap
           path: reports/zap.json
           if-no-files-found: warn
+      - name: Show application logs on failure
+        if: failure()
+        run: docker logs app || true
       - name: Cleanup
         if: always()
         run: docker rm -f app || true
@@ -334,7 +337,7 @@ jobs:
           COMMIT: ${{ github.sha }}
         run: |
           mkdir -p deployment-evidence
-          curl --retry 30 --retry-delay 1 --retry-connrefused --fail --silent --show-error http://127.0.0.1:8000/health
+          curl --retry 30 --retry-delay 1 --retry-all-errors --retry-max-time 30 --max-time 2 --fail --silent --show-error http://127.0.0.1:8000/health
           docker cp scripts/smoke.py deployed-app:/tmp/project8-smoke.py
           docker exec deployed-app python /tmp/project8-smoke.py --output /tmp/project8-smoke.json --commit "$COMMIT" --image-id "$(docker inspect --format='{{.Image}}' deployed-app)"
           docker cp deployed-app:/tmp/project8-smoke.json deployment-evidence/smoke.json

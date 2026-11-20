@@ -55,6 +55,8 @@ def payload(groups, model):
             category = "flask-debug"
         elif "B602" in group["primary_ids"]:
             category = "shell-command"
+        elif "B324" in group["primary_ids"]:
+            category = "weak-hash"
         compact.append(
             {
                 "id": group["id"],

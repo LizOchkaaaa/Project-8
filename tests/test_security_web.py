@@ -21,7 +21,7 @@ def web():
     return app, client, {"X-Assistant-Token": token}
 
 
-def uploads():
+def uploads(bandit_rule="B602"):
     reports = {
         "gitleaks": [],
         "bandit": {
@@ -29,7 +29,7 @@ def uploads():
             "metrics": {"_totals": {"loc": 4}},
             "results": [
                 {
-                    "test_id": "B602",
+                    "test_id": bandit_rule,
                     "issue_severity": "HIGH",
                     "filename": "private.py",
                     "line_number": 4,
@@ -228,8 +228,8 @@ def test_real_http_model_roundtrip_and_error(web, monkeypatch, status):
                     {
                         "group_id": group["id"],
                         "order": index + 1,
-                        "reason": "Запуск через оболочку требует проверки.",
-                        "action": "Передавайте аргументы списком и повторите сканирование.",
+                        "reason": "Слабый алгоритм хеширования требует проверки.",
+                        "action": "Замените слабый хеш и повторите сканирование.",
                     }
                     for index, group in enumerate(groups)
                 ]
@@ -251,7 +251,7 @@ def test_real_http_model_roundtrip_and_error(web, monkeypatch, status):
             "/api/security/analyze",
             headers=headers,
             data={
-                "reports": uploads(),
+                "reports": uploads("B324"),
                 "use_model": "on",
                 "api_key": "fake-web-key",
                 "base_url": f"http://127.0.0.1:{server.server_port}/v1",
@@ -268,6 +268,8 @@ def test_real_http_model_roundtrip_and_error(web, monkeypatch, status):
     assert observed["auth"] == "Bearer fake-web-key"
     assert observed["path"] == "/v1/chat/completions"
     assert observed["body"]["model"] == "test-model"
+    [sent_group] = json.loads(observed["body"]["messages"][1]["content"])["untrusted_groups"]
+    assert sent_group["category"] == "weak-hash"
     compact = json.dumps(observed["body"])
     assert all(
         value not in compact
