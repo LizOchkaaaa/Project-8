@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Разбор проверок · Project 8{% endblock %}
+{% block body_attributes %} class="audit-page"{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='audit.css') }}">
+<script src="{{ url_for('static', filename='security.js') }}" defer></script>
+{% endblock %}
+{% block content %}
+<div class="audit-layout">
+  <header class="audit-intro">
+    <h1 id="audit-title">Проверка выпуска</h1>
+    <p>Загрузите отчёты CI, чтобы увидеть блокировки и порядок исправлений.</p>
+  </header>
+  <noscript><p class="notice">Без JavaScript отчёты можно загрузить через <a href="/reports/local">серверную форму</a>.</p></noscript>
+<div id="workbench" hidden>
+  <div id="operation" class="operation" tabindex="-1">
+    <span id="processing-state" class="processing-spinner" aria-hidden="true" hidden></span>
+    <p id="assistant-status" role="status" aria-live="polite"></p>
+    <button type="button" id="retry-history-report" class="secondary compact" hidden>Повторить</button>
+  </div>
+  <section id="analysis-result" class="result-strip" tabindex="-1" aria-labelledby="report-gate" hidden>
+    <div class="result-decision">
+      <p id="result-origin" class="audit-kicker"></p>
+      <div id="gate-summary" class="gate-summary">
+        <span id="gate-icon" aria-hidden="true"></span>
+        <div><h2 id="report-gate"></h2><p id="gate-scope" class="field-help"></p></div>
+      </div>
+    </div>
+    <dl class="result-totals">
+      <div><dt>Отчёты</dt><dd id="report-total"></dd></div>
+      <div><dt>Группы</dt><dd id="group-total"></dd></div>
+      <div><dt>Блокируют</dt><dd id="blocked-total"></dd></div>
+    </dl>
+    <button type="button" id="download-analysis" class="secondary compact" aria-label="Скачать текущий разбор в JSON">{{ icon('file') }}Скачать JSON</button>
+  </section>
+  <p id="history-warning" class="revision-warning" role="status" hidden>Разбор готов и доступен для скачивания, но сохранить его в журнале не удалось.</p>
+  <p id="revision-warning" class="revision-warning" hidden>Этот разбор сделан с другой версией локальных настроек. Чтобы проверить текущие пороги, загрузите отчёты заново.</p>
+  <div class="audit-console">
+  <div class="workbench-toolbar">
+    <span id="intake-caption">Новый разбор</span>
+    <div hidden class="workspace-tabs" role="tablist" aria-label="Представления разбора">
+      <button type="button" id="tab-sources" role="tab" aria-selected="true" aria-controls="sources">Источники</button>
+      <button type="button" id="tab-overview" role="tab" aria-selected="false" aria-controls="overview" tabindex="-1">Обзор</button>
+      <button type="button" id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" tabindex="-1">Замечания<span id="group-count" class="tab-count" hidden></span></button>
+    </div>
+  <div id="workspace-actions" class="workspace-actions" hidden>
+    <details id="import-analysis" class="work-menu" name="workspace-tools">
+      <summary>{{ icon('file') }}Открыть разбор</summary>
+      <div class="work-menu-body">
+        <label for="analysis-file">Готовый разбор (analysis.json)</label>
+        <input type="file" id="analysis-file" accept=".json,application/json" aria-describedby="import-help">
+        <p id="import-help" class="field-help">Подойдёт сохранённый разбор или файл из артефакта CI <code>security-analysis</code> или <code>security-gate</code>. До 8&nbsp;МиБ, чтение в браузере.</p>
+      </div>
+    </details>
+    <details id="demo-menu" class="work-menu" name="workspace-tools">
+      <summary>{{ icon('play') }}Учебный сценарий</summary>
+      <div class="work-menu-body">
+        <p class="field-help">Сравните пороги на синтетических отчётах. Сканеры и модель здесь не запускаются.</p>
+        <button type="button" data-demo="fail" class="secondary compact">До исправления</button>
+        <button type="button" data-demo="fixed" class="secondary compact">После исправления</button>
+      </div>
+    </details>
+  </div>
+  </div>
+  <section id="overview" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-overview" hidden>
+
+    <div id="analysis-overview" class="overview-body" hidden>
+      <p id="analysis-meta" class="result-metadata" hidden></p>
+      <section id="pipeline-errors" class="overview-section" aria-labelledby="pipeline-title" hidden><h2 id="pipeline-title">Что мешает допуску</h2><ul id="failure-list"></ul></section>
+      <div class="overview-section">
+        <h2>Следующий шаг</h2>
+        <p id="next-action"></p>
+        <p id="next-evidence" class="first-evidence" hidden></p>
+        <button type="button" id="next-finding" class="secondary compact" hidden>Открыть замечание</button>
+      </div>
+      <p id="advisory-source" class="result-metadata"></p>
+    </div>
+  </section>
+  <section id="sources" class="workspace-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-sources">
+    <div class="sources-layout">
+      <section class="source-register" aria-labelledby="source-title">
+        <div class="work-section-title source-heading"><h2 id="source-title">Отчёты сканеров</h2><span>5 источников CI</span></div>
+        <table class="source-table" aria-labelledby="source-title">
+          <thead><tr><th scope="col">Проверка</th><th scope="col" class="source-file">Файл</th>{% if assistant_token %}<th scope="col">Загрузка</th>{% endif %}<th scope="col" data-result-column hidden>В разборе</th></tr></thead>
+          <tbody>
+          {% for scanner, title, category in [('gitleaks','Gitleaks','Секреты'),('bandit','Bandit','Python-код'),('pip-audit','pip-audit','Зависимости'),('trivy','Trivy','Контейнер'),('zap','OWASP ZAP','Веб-приложение')] %}
+            <tr data-scanner="{{ scanner }}"><th scope="row"><span class="scanner-cell">{{ icon('file') }}<span><span translate="no">{{ title }}</span><small>{{ category }}</small></span></span></th><td class="source-file"><code translate="no">{{ scanner }}.json</code></td>{% if assistant_token %}<td class="queue-state">Нет файла</td>{% endif %}<td class="scan-state" data-result-column hidden></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <details id="fetch-details" class="fetch-details" hidden><summary>Журнал получения по HTTP</summary><ul id="fetch-states"></ul></details>
+      </section>
+      <section class="source-intake" aria-labelledby="assistant-title">
+        <h2 id="assistant-title">Загрузка отчётов</h2>
+        {% if assistant_token %}
+        <form id="assistant-form" method="post" data-token="{{ assistant_token }}" autocomplete="off">
+          <div class="upload-zone" id="upload-zone">
+            {{ icon('upload') }}
+            <label class="upload-label" for="report-files">Выбрать JSON-файлы</label>
+            <input type="file" id="report-files" name="reports" accept=".json,application/json" multiple required aria-describedby="reports-help selected-files">
+          </div>
+          <p id="reports-help" class="field-help">Можно перетащить файлы сюда. До 8&nbsp;МиБ на файл. Также принимаются имена из CI: <code>sast.json</code>, <code>sca.json</code>, <code>report.json</code>.</p>
+          <p id="selected-files" class="field-help" role="status"></p>
+          <details class="model-option">
+            <summary>Рекомендации модели</summary>
+            <p class="field-help">По умолчанию разбор локальный. При включении провайдер получит только идентификаторы групп, категории, уровни и названия сканеров.</p>
+            <label for="model-mode">Подключение</label>
+            <select id="model-mode"><option value="profile">Профиль из настроек стенда</option><option value="once">Разовое подключение</option></select>
+            <div id="profile-description"><p class="field-help" id="profile-target" role="status">Читаем настройки модели…</p><a href="/admin" class="local-analysis-link">Настроить модель</a> · <button type="button" id="reload-profile" class="secondary compact">Обновить</button></div>
+            <input type="hidden" id="profile-revision" name="model_revision" disabled>
+            <fieldset id="model-settings" hidden disabled>
+              <legend>Разовое подключение</legend>
+              <label for="api-base">Адрес совместимого API</label>
+              <input id="api-base" name="base_url" type="url" value="https://api.openai.com/v1" maxlength="2000" required spellcheck="false">
+              <label for="api-model">Название модели</label>
+              <input id="api-model" name="model" type="text" maxlength="200" required spellcheck="false">
+              <label for="api-key">Ключ на один запрос</label>
+              <input id="api-key" name="api_key" type="password" maxlength="4096" autocomplete="off" required spellcheck="false">
+            </fieldset>
+            <label class="check-label" for="use-model"><input type="checkbox" id="use-model" name="use_model" disabled>Отправить сводку этому провайдеру при разборе</label>
+          </details>
+          <button type="submit" disabled id="analyze-button" class="primary-button">Разобрать отчёты{{ icon('arrow') }}</button>
+        </form>
+        <details class="tools-panel">
+          <summary>Получить по HTTP</summary>
+          <p id="tools-summary" class="field-help">Читаем настройки источников…</p>
+          <button type="button" disabled id="run-tools" class="secondary compact">Получить и разобрать</button>
+          <a href="/admin/connections">Настроить источники</a>
+        </details>
+        {% else %}
+        <p class="field-help">Загрузка и ввод ключа доступны при локальном запуске. Здесь можно открыть готовый JSON или учебный пример.</p>
+        {% endif %}
+      </section>
+    </div>
+  </section>
+  <section id="findings" class="workspace-panel findings-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-findings" hidden>
+    <p id="no-findings" class="work-section-title">Замечания появятся после разбора.</p>
+    <ol id="recommendations" class="recommendations"></ol>
+  </section>
+  </div>
+</div>
+</div>
+{% endblock %}

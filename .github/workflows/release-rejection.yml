@@ -1,0 +1,14 @@
+name: Release rehearsal (expected rejection)
+
+on:
+  push:
+    branches: [demo/release-rejection]
+
+permissions:
+  contents: read
+
+jobs:
+  reject:
+    uses: ./.github/workflows/ci.yml
+    with:
+      security_demo: fail

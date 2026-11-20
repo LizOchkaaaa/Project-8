@@ -1,0 +1,15 @@
+﻿{% extends "base.html" %}
+{% block title %}Загрузка отчётов · Project 8{% endblock %}
+{% block content %}
+<header class="page-heading"><div><h1>Загрузка отчётов</h1><p>Сервер разберёт файлы и покажет порядок исправлений.</p></div></header>
+<section class="input-panel"><form method="post" enctype="multipart/form-data" action="/reports/local#analysis" autocomplete="off">
+<input name="token" type="hidden" value="{{ assistant_token }}">
+<label for="local-files">Отчёты проверок</label><input id="local-files" type="file" name="reports" accept=".json,application/json" multiple required>
+<p class="field-help">До пяти файлов по 8 МиБ: gitleaks.json, bandit.json, pip-audit.json, trivy.json или zap.json. Также принимаются имена из CI: sast.json, sca.json, report.json. Результат сохраняется в локальном журнале; исходные файлы удаляются после разбора.</p>
+<details><summary>Попросить пояснение модели</summary><fieldset><legend>Совместимый API</legend>
+<label>Базовый адрес API<input type="url" name="base_url" value="https://api.openai.com/v1" maxlength="2000"></label><label>Модель<input name="model" maxlength="200"></label><label>Ключ на один запрос<input type="password" name="api_key" maxlength="4096" autocomplete="off"></label>
+<label><input type="checkbox" name="use_model"> Отправить идентификаторы групп, категории, уровни и названия сканеров указанному провайдеру</label></fieldset></details>
+<button class="primary-button" type="submit">Разобрать отчёты</button></form></section>
+<div id="analysis">{% if error %}<p role="alert">{{ error }}</p>{% elif result %}<section class="result-panel"><h2>{{ 'Порог не пройден' if result.gate.status == 'blocked' else 'Порог пройден' }}</h2><p>Окончательное решение о выпуске принимает CI.</p>{% if report_id %}<p><a href="/security?report={{ report_id }}">Открыть сохранённый разбор в рабочей области</a></p>{% else %}<p role="status">Разбор выполнен, но записать его в журнал не удалось.</p>{% endif %}<ul>{% for scanner, scan in result.scans.items() %}<li>{{ scanner }} — {{ {'clean':'без замечаний','findings':'есть замечания','error':'отчёт отсутствует или не разобран','missing':'нет отчёта'}.get(scan.status,scan.status) }}{% if scan.count %} ({{ scan.count }}){% endif %}</li>{% endfor %}</ul>
+<h2>Порядок исправлений</h2><ol>{% for rec in result.advisory.recommendations %}{% set group=by_group[rec.group_id] %}<li><strong>{{ group.title }}</strong> · <code>{{ group.primary_ids|join(', ') }}</code><p><strong>{{ 'Рекомендация модели' if result.advisory.mode == 'model' else 'Рекомендация по локальным правилам' }}:</strong> {{ rec.action }}</p><details><summary>Источники</summary><ul>{% for e in group.evidence %}<li>{{ e.scanner }} · {{ e.file or e.target or e.package }}{% if e.line %}:{{ e.line }}{% endif %}</li>{% endfor %}</ul></details></li>{% else %}<li>В разобранных файлах замечаний не найдено.</li>{% endfor %}</ol><p>{{ result.advisory.message }}</p></section>{% endif %}</div>
+{% endblock %}

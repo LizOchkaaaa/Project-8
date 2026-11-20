@@ -1,0 +1,11 @@
+<section id="connections" class="settings-section" aria-labelledby="connections-title">
+      <div class="settings-heading"><div><h2 id="connections-title">Источники отчётов</h2><p>Каждый адрес должен отдавать готовый JSON-отчёт соответствующего сканера.</p></div><span id="connector-count" class="count-badge"></span></div>
+      <p class="field-help">Публичный HTTPS или локальный HTTP. Метод GET, без параметров URL и редиректов. Получение отчёта не запускает сканер и не подтверждает свежесть данных.</p>
+      {% for scanner, title, category in [('gitleaks','Gitleaks','Секреты'),('bandit','Bandit','Python-код'),('pip-audit','pip-audit','Зависимости'),('trivy','Trivy','Контейнер'),('zap','OWASP ZAP','Запущенное приложение')] %}
+      <article class="connector-row" data-scanner="{{ scanner }}">
+        <div class="connector-heading"><div><h3>{{ title }}</h3><span class="field-help">{{ category }}</span></div><label class="check-label" for="enabled-{{ scanner }}"><input id="enabled-{{ scanner }}" type="checkbox" name="enabled-{{ scanner }}"><span>Подключён</span></label></div>
+        <div class="connector-fields"><div><label for="url-{{ scanner }}">Адрес JSON-отчёта</label><input id="url-{{ scanner }}" name="url-{{ scanner }}" type="url" maxlength="2000" placeholder="https://reports.example.org/{{ scanner }}.json" spellcheck="false" autocomplete="off" required></div><div><label for="credential-{{ scanner }}">Авторизация</label><select id="credential-{{ scanner }}" name="credential-{{ scanner }}"><option value="">Без авторизации</option><option value="PROJECT8_CONNECTOR_{{ scanner | upper | replace('-', '_') }}_TOKEN">Bearer из окружения</option></select></div></div>
+        <p id="credential-help-{{ scanner }}" class="credential-help field-help" hidden>Переменная <code>PROJECT8_CONNECTOR_{{ scanner | upper | replace('-', '_') }}_TOKEN</code>. Значение задаётся в окружении сервера и не возвращается браузеру.</p>
+      </article>
+      {% endfor %}
+    </section>

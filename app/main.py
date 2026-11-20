@@ -1,17 +1,22 @@
 import os
 import threading
+from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, send_file
+
+from app.security import register_security
 
 MAX_TEXT_LENGTH = 200
 MAX_ITEMS = 1000
 
 
-def create_app() -> Flask:
-    app = Flask(__name__)
+def create_app(*, instance_path=None) -> Flask:
+    app = Flask(__name__, instance_path=instance_path or os.environ.get("PROJECT8_INSTANCE_DIR"))
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+    register_security(app)
 
     items: list[dict] = []
+    next_id = 1
     lock = threading.Lock()
 
     @app.after_request
@@ -20,28 +25,39 @@ def create_app() -> Flask:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
-
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self'; "
-            "script-src 'self'; frame-ancestors 'none'; "
-            "base-uri 'self'; form-action 'self'"
+            "default-src 'self'; style-src 'self'; script-src 'self'; "
+            "connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'self'; frame-ancestors 'none'"
         )
-
         response.headers["Permissions-Policy"] = (
             "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
             "magnetometer=(), microphone=(), payment=(), usb=()"
         )
-
         response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-
         response.headers.pop("Server", None)
         return response
 
     @app.get("/")
     def index():
+        return redirect("/security")
+
+    @app.get("/notes")
+    def notes():
         return render_template("index.html")
+
+    @app.get("/security")
+    def security():
+        return render_template("security.html")
+
+    @app.get("/documentation")
+    def documentation():
+        document = Path(app.root_path).parent / "docs" / "Project-8-guide.docx"
+        if not document.is_file():
+            return jsonify(error="Документация отсутствует в этой сборке."), 404
+        return send_file(document, as_attachment=True, download_name="Project-8-guide.docx")
 
     @app.get("/health")
     def health():
@@ -54,6 +70,7 @@ def create_app() -> Flask:
 
     @app.post("/api/items")
     def create_item():
+        nonlocal next_id
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(error="Ожидается JSON-объект"), 400
@@ -68,7 +85,8 @@ def create_app() -> Flask:
         with lock:
             if len(items) >= MAX_ITEMS:
                 return jsonify(error="Хранилище переполнено"), 507
-            item = {"id": len(items) + 1, "text": text}
+            item = {"id": next_id, "text": text}
+            next_id += 1
             items.append(item)
         return jsonify(item), 201
 
@@ -99,7 +117,4 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(
-        host=os.environ.get("HOST", "127.0.0.1"),
-        port=int(os.environ.get("PORT", "8000")),
-    )
+    app.run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))

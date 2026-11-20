@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "required_scanners": ["gitleaks", "bandit", "pip-audit", "trivy", "zap"],
+  "fail_closed": true,
+  "block_secrets": true,
+  "block_unknown": true,
+  "thresholds": {
+    "gitleaks": "low",
+    "bandit": "medium",
+    "pip-audit": "high",
+    "trivy": "high",
+    "zap": "medium"
+  }
+}

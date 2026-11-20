@@ -1,23 +1,17 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мои заметки</title>
-    <link rel="stylesheet" href="../static/css/style.css">
-</head>
-<body>
-
-    <h1>📝 Заметки</h1>
-    
-    <div class="input-group">
-        <input type="text" id="noteInput" placeholder="Введите текст" maxlength="200">
-        <button onclick="addNote()">Добавить</button>
-    </div>
-    <div id="error" class="error"></div>
-
-    <ul id="notesList"></ul>
-
-    <script src="../static/js/script.js"></script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Заметки · Project 8{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='notes.js') }}" defer></script>{% endblock %}
+{% block content %}
+<header class="page-heading"><div><h1>Учебные заметки</h1><p>Отдельный пример API. Записи не относятся к проверкам и не отправляются модели.</p></div></header>
+<div class="notes-layout"><div>
+  <section class="note-editor" aria-labelledby="new-note">
+    <h2 id="new-note">Новая заметка</h2>
+    <form id="note-form"><label for="note-text">Что нужно запомнить?</label><textarea id="note-text" name="text" maxlength="200" rows="3" required autocomplete="off" placeholder="Например, что проверить перед следующим выпуском…" aria-describedby="note-help"></textarea><button type="submit">Добавить заметку</button></form>
+    <p id="note-help" class="field-help">До 200 символов. Записи общие и исчезают после перезапуска приложения. Не сохраняйте секреты.</p>
+  </section>
+  <h2 class="notes-list-heading">Записи команды</h2>
+  <p id="note-status" role="status" aria-live="polite">Загружаем заметки…</p>
+  <ul id="notes" class="notes" aria-label="Сохранённые заметки"></ul>
+</div><aside class="notes-aside">{{ icon('scan') }}<h2>Что исправить первым?</h2><p>Загрузите отчёты сканеров. Помощник сопоставит замечания и предложит порядок работы.</p><a href="/security">Разбор проверок{{ icon('arrow') }}</a></aside></div>
+<noscript><p>Для добавления заметок включите JavaScript. API доступен по /api/items.</p></noscript>
+{% endblock %}

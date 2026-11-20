@@ -26,9 +26,7 @@ def test_health(client: FlaskClient) -> None:
     with allure.step("Check status HTTP code"):
         assert r.status_code == 200, f"Expected code 200, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Check body answer"):
@@ -36,48 +34,37 @@ def test_health(client: FlaskClient) -> None:
             f"Expected status - ok, but received {r.get_json()}"
         )
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
 
 @allure.story("Test for checking main HTML page")
 def test_index(client: FlaskClient) -> None:
-    """
-    Checks the main HTML page and verifies that it contains the word "Заметки".
-    """
+    response = client.get("/", follow_redirects=True)
+    assert response.request.path == "/security"
+    assert response.status_code == 200
+    assert 'id="workbench"' in response.get_data(as_text=True)
+    assert 'href="/notes"' not in response.get_data(as_text=True)
+    assert "Учебные заметки" in client.get("/notes").get_data(as_text=True)
 
-    with allure.step("Sending a GET request to /"):
-        r = client.get("/")
 
-    with allure.step("Check status HTTP code"):
-        assert r.status_code == 200, f"Expected code 200, but received {r.status_code}"
-        allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
-        )
-
-    with allure.step("Check body answer"):
-        assert r.content_type.startswith("text/html"), (
-            f"Expected text/html, but received {r.content_type}"
-        )
-        allure.attach(
-            str(r.content_type),
-            name="Content-Type",
-            attachment_type=allure.attachment_type.TEXT,
-        )
-
-        html_content = r.get_data(as_text=True)
-        assert "Заметки" in html_content, (
-            "The word 'Заметки' was not found on the page. The template may not have loaded"
-        )
-        allure.attach(
-            html_content,
-            name="Response HTML",
-            attachment_type=allure.attachment_type.HTML,
-        )
+@pytest.mark.parametrize(
+    "page,section",
+    [
+        ("", "model-profile"),
+        ("/connections", "connections"),
+        ("/policy", "policy"),
+        ("/environment", "environment"),
+        ("/mcp", "mcp-settings"),
+    ],
+)
+def test_admin_section(client, page, section):
+    response = client.get("/admin" + page)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert f'<section id="{section}"' in html
+    assert html.count('class="settings-section') == 1
+    assert client.get("/admin" + page, base_url="http://outside.example").status_code == 403
 
 
 @allure.story("Test for checking GET /api/items on an empty storage")
@@ -90,17 +77,13 @@ def test_list_empty(client: FlaskClient) -> None:
         r = client.get("/api/items")
         response_json = r.get_json()
         allure.attach(
-            str(response_json),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(response_json), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check status HTTP code"):
         assert r.status_code == 200, f"Expected code 200, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Check body answer is empty list"):
@@ -125,29 +108,21 @@ def test_create_and_list(client: FlaskClient) -> None:
     with allure.step(f"Send request to /api/items with data: {payload}"):
         r = client.post("/api/items", json=payload)
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
         assert r.status_code == 201, f"Expected code 201, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Check that spaces were trimmed and ID is correct"):
         expected_item = {"id": 1, "text": "hello"}
         actual_item = r.get_json()
-        assert actual_item == expected_item, (
-            f"Expected {expected_item}, but received {actual_item}"
-        )
+        assert actual_item == expected_item, f"Expected {expected_item}, but received {actual_item}"
         allure.attach(
-            str(actual_item),
-            name="Actual data",
-            attachment_type=allure.attachment_type.TEXT,
+            str(actual_item), name="Actual data", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Send request to /api/items to verify the list"):
@@ -156,13 +131,9 @@ def test_create_and_list(client: FlaskClient) -> None:
 
     with allure.step("Check that the list contains exactly our new note"):
         expected_list = {"items": [{"id": 1, "text": "hello"}]}
-        assert list_json == expected_list, (
-            f"Expected {expected_list}, but received {list_json}"
-        )
+        assert list_json == expected_list, f"Expected {expected_list}, but received {list_json}"
         allure.attach(
-            str(list_json),
-            name="Items List",
-            attachment_type=allure.attachment_type.JSON,
+            str(list_json), name="Items List", attachment_type=allure.attachment_type.JSON
         )
 
 
@@ -177,17 +148,13 @@ def test_delete_item(client: FlaskClient) -> None:
         r = client.post("/api/items", json=payload)
         item_id = r.get_json()["id"]
         allure.attach(
-            str(payload),
-            name="Created Note Payload",
-            attachment_type=allure.attachment_type.JSON,
+            str(payload), name="Created Note Payload", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
         assert r.status_code == 201, f"Failed to create note. Code: {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step(f"Send DELETE request to /api/items/{item_id}"):
@@ -225,9 +192,7 @@ def test_delete_item(client: FlaskClient) -> None:
 
     with allure.step("Check that the list is empty"):
         expected_list = {"items": []}
-        assert list_json == expected_list, (
-            f"Expected {expected_list}, but received {list_json}"
-        )
+        assert list_json == expected_list, f"Expected {expected_list}, but received {list_json}"
         allure.attach(
             str(list_json),
             name="Items List After Deletion",
@@ -246,17 +211,13 @@ def test_delete_not_found(client: FlaskClient) -> None:
     with allure.step(f"Send DELETE request to /api/items/{non_existent_id}"):
         r = client.delete(f"/api/items/{non_existent_id}")
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
         assert r.status_code == 404, f"Expected code 404, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Check that the server returned the correct error message"):
@@ -266,9 +227,7 @@ def test_delete_not_found(client: FlaskClient) -> None:
             f"Expected {expected_error}, but received {actual_error}"
         )
         allure.attach(
-            str(actual_error),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(actual_error), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
 
@@ -291,16 +250,10 @@ def test_create_rejects_bad_payload(client: FlaskClient, payload: dict | list) -
 
     with allure.step(f"Send POST request with bad payload: {payload}"):
         r = client.post("/api/items", json=payload)
-        allure.attach(
-            str(payload),
-            name="Bad Payload",
-            attachment_type=allure.attachment_type.TEXT,
-        )
+        allure.attach(str(payload), name="Bad Payload", attachment_type=allure.attachment_type.TEXT)
 
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
@@ -308,9 +261,7 @@ def test_create_rejects_bad_payload(client: FlaskClient, payload: dict | list) -
             f"Expected code 400 for payload {payload}, but received {r.status_code}"
         )
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
 
@@ -332,17 +283,13 @@ def test_create_rejects_non_json(client: FlaskClient) -> None:
 
         r = client.post("/api/items", data=non_json_data, content_type=content_type)
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
         assert r.status_code == 400, f"Expected code 400, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
 
@@ -365,17 +312,13 @@ def test_create_rejects_too_long(client: FlaskClient) -> None:
 
         r = client.post("/api/items", json={"text": long_text})
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code is 400"):
         assert r.status_code == 400, f"Expected code 400, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
 
@@ -398,17 +341,13 @@ def test_body_too_large(client: FlaskClient) -> None:
 
         r = client.post("/api/items", json={"text": huge_text})
         allure.attach(
-            str(r.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
         assert r.status_code == 413, f"Expected code 413, but received {r.status_code}"
         allure.attach(
-            str(r.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
 
@@ -421,9 +360,7 @@ def test_not_found_and_method_not_allowed(client: FlaskClient) -> None:
     with allure.step("Send GET request to a non-existent URL"):
         r_404 = client.get("/nope")
         allure.attach(
-            str(r_404.get_json()),
-            name="Response JSON",
-            attachment_type=allure.attachment_type.JSON,
+            str(r_404.get_json()), name="Response JSON", attachment_type=allure.attachment_type.JSON
         )
 
     with allure.step("Check HTTP status code"):
@@ -431,9 +368,7 @@ def test_not_found_and_method_not_allowed(client: FlaskClient) -> None:
             f"Expected code 404 for unknown URL, but received {r_404.status_code}"
         )
         allure.attach(
-            str(r_404.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r_404.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
     with allure.step("Send DELETE request to /api/items"):
@@ -449,9 +384,7 @@ def test_not_found_and_method_not_allowed(client: FlaskClient) -> None:
             f"Expected code 405 for DELETE /api/items, but received {r_405.status_code}"
         )
         allure.attach(
-            str(r_405.status_code),
-            name="Status code",
-            attachment_type=allure.attachment_type.TEXT,
+            str(r_405.status_code), name="Status code", attachment_type=allure.attachment_type.TEXT
         )
 
 
@@ -478,9 +411,7 @@ def test_security_headers(client: FlaskClient) -> None:
     with allure.step("Check Content-Security-Policy"):
         csp = h["Content-Security-Policy"]
         assert "default-src 'self'" in csp, f"Missing default-src 'self' in: {csp}"
-        assert "frame-ancestors 'none'" in csp, (
-            f"Missing frame-ancestors 'none' in: {csp}"
-        )
+        assert "frame-ancestors 'none'" in csp, f"Missing frame-ancestors 'none' in: {csp}"
 
     with allure.step("Check Cache-Control"):
         assert h["Cache-Control"] == "no-store"
