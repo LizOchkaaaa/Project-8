@@ -103,6 +103,13 @@ def test_local_host_and_token_required(web, remote, host, token):
         assert 'id="api-key"' not in html and "data-token=" not in html
 
 
+def test_head_checks_access_without_treating_it_as_a_write(web):
+    _, client, headers = web
+    assert client.head("/reports/local").status_code == 200
+    assert client.head("/api/security/config", headers=headers).status_code == 200
+    assert client.head("/api/security/config").status_code == 403
+
+
 def test_upload_analysis_does_not_inherit_server_key(web, monkeypatch):
     _, client, headers = web
     monkeypatch.setenv("OPENAI_API_KEY", "server-key-must-not-be-used")

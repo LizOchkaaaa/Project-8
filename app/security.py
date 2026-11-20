@@ -87,7 +87,7 @@ def register_security(app):
         if not authorized():
             return api_error("forbidden", 403)
         try:
-            if request.method == "GET":
+            if request.method in {"GET", "HEAD"}:
                 return config_response(store.snapshot())
             request.max_content_length = CONFIG_LIMIT
             if request.mimetype != "application/json":
@@ -178,7 +178,7 @@ def register_security(app):
     def local_reports():
         if not local_request():
             return api_error("forbidden", 403)
-        if request.method == "GET":
+        if request.method in {"GET", "HEAD"}:
             return render_template("local_reports.html")
         request.max_content_length = 5 * MAX_BYTES + 64 * 1024
         request.max_form_memory_size = 512 * 1024
