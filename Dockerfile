@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,10 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Installation tooling is not needed in the running container.
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip check \
+    && python -m pip uninstall -y pip \
+    && rm -rf /usr/local/lib/python3.13/ensurepip
 
 COPY app ./app
 COPY security_assistant ./security_assistant
@@ -18,7 +22,7 @@ COPY .security ./.security
 COPY docs ./docs
 
 # Запуск не от root
-RUN useradd --system --no-create-home --uid 10001 appuser \
+RUN adduser -S -D -H -u 10001 appuser \
     && install -d -m 0700 -o appuser "$PROJECT8_INSTANCE_DIR"
 USER appuser
 

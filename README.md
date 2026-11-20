@@ -136,7 +136,7 @@ Ruff + pytest + Gitleaks + Bandit + pip-audit (параллельно)
 advisory (always) → доступные reports текущего run → security-analysis
 ```
 
-Ранние дешёвые сканы и тесты дают независимую диагностику. Затем Trivy проверяет образ, ZAP — HTTP/CSP запущенного сервиса. ZAP baseline пассивный, не полный аудит API; exit 1/2 означает findings/WARN, severity определяет policy, exit 3+ — operational failure. Отчёты загружаются через `always()`, ошибки запуска не превращаются в clean.
+Ранние дешёвые сканы и тесты дают независимую диагностику. При каждой CI-сборке обновляются базовый образ Python на Alpine и системные пакеты. `pip` нужен только для установки зависимостей и удаляется из готового образа. Затем Trivy проверяет образ, ZAP — HTTP/CSP запущенного сервиса. ZAP baseline пассивный, не полный аудит API; exit 1/2 означает findings/WARN, severity определяет policy, exit 3+ — operational failure. Отчёты загружаются через `always()`, ошибки запуска не превращаются в clean.
 
 Gate проверяет каждый needs: lint/tests/secret-detection/sast/sca/build/scan-image/dast. Advisory собирает только текущий run, отражает missing/skipped и пишет summary, без PR-комментариев. Ошибка модели не блокирует чистый gate. Модельный secret передаётся только на push main или manual **main**; любые PR и manual других веток используют fallback. `pull_request_target` отсутствует. В настройках GitHub при необходимости задайте secret `OPENAI_API_KEY`, variables `OPENAI_BASE_URL`, `OPENAI_MODEL`.
 

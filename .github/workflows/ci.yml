@@ -152,8 +152,8 @@ jobs:
           context: .
           tags: myapp:${{ github.sha }}
           outputs: type=docker,dest=/tmp/app.tar
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          pull: true
+          no-cache: true
       - run: cd /tmp && sha256sum app.tar > app.tar.sha256
       - uses: actions/upload-artifact@v7
         with:
