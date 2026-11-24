@@ -323,6 +323,7 @@ jobs:
       - name: Download all reports
         uses: actions/download-artifact@v7
         with:
+          pattern: "*-report"
           path: downloaded-reports
 
       - name: Set up Python

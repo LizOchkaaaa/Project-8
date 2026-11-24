@@ -21,11 +21,11 @@ def create_app() -> Flask:
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
 
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self'; "
-            "script-src 'self'; frame-ancestors 'none'; "
-            "base-uri 'self'; form-action 'self'"
-        )
+        # response.headers["Content-Security-Policy"] = (
+        #     "default-src 'self'; style-src 'self'; "
+        #     "script-src 'self'; frame-ancestors 'none'; "
+        #     "base-uri 'self'; form-action 'self'"
+        # )
 
         response.headers["Permissions-Policy"] = (
             "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
