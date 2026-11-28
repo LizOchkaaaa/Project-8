@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
-RUN useradd --system --no-create-home --uid 10001 appuser
+RUN useradd --system --no-create-home --uid 10001 appuser \
+    && install -d -m 0700 -o appuser "$PROJECT8_INSTANCE_DIR"
 USER appuser
 
 EXPOSE 8000
